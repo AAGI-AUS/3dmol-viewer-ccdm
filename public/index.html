@@ -268,11 +268,11 @@
           <span class="chain-tag">A</span>
           <div class="color-swatches">
             <label class="color-swatch">
-              <input type="color" id="color-A-base"  value="#60a5fa" oninput="onColorChange()">
+              <input type="color" id="color-A-base"  value="#0072B2" oninput="onColorChange()">
               <span>Structure</span>
             </label>
             <label class="color-swatch">
-              <input type="color" id="color-A-iface" value="#00e5ff" oninput="onColorChange()">
+              <input type="color" id="color-A-iface" value="#003F6B" oninput="onColorChange()">
               <span>Interface</span>
             </label>
           </div>
@@ -281,11 +281,11 @@
           <span class="chain-tag">B</span>
           <div class="color-swatches">
             <label class="color-swatch">
-              <input type="color" id="color-B-base"  value="#f472b6" oninput="onColorChange()">
+              <input type="color" id="color-B-base"  value="#E69F00" oninput="onColorChange()">
               <span>Structure</span>
             </label>
             <label class="color-swatch">
-              <input type="color" id="color-B-iface" value="#ff6d00" oninput="onColorChange()">
+              <input type="color" id="color-B-iface" value="#A65F00" oninput="onColorChange()">
               <span>Interface</span>
             </label>
           </div>
@@ -399,8 +399,8 @@ const AA_NAME = {
 };
 
 const DEFAULTS = {
-  'color-A-base': '#60a5fa', 'color-A-iface': '#00e5ff',
-  'color-B-base': '#f472b6', 'color-B-iface': '#ff6d00'
+  'color-A-base': '#0072B2', 'color-A-iface': '#003F6B',
+  'color-B-base': '#E69F00', 'color-B-iface': '#A65F00'
 };
 // Fallback colours for chains C/D/E
 const EXTRA_BASE  = ['#a3e635', '#fb923c', '#c084fc'];
@@ -643,7 +643,7 @@ function setupClickHandler() {
       delete activeLabels[key];
     } else {
       const col   = chainColor(atom.chain, 'base');
-      const label = `${atom.resname} ${atom.resi} · ${atom.chain}`;
+      const label = `${atom.resn} ${atom.resi} · ${atom.chain}`;
       activeLabels[key] = viewer.addLabel(label, {
         position:          { x: atom.x, y: atom.y, z: atom.z },
         backgroundColor:   'black',
@@ -664,11 +664,11 @@ function setupClickHandler() {
 }
 
 function updateAtomInfoBar(atom) {
-  const aa1  = AA3TO1[atom.resname]  || '?';
-  const name = AA_NAME[atom.resname] || atom.resname;
+  const aa1  = AA3TO1[atom.resn]  || '?';
+  const name = AA_NAME[atom.resn] || atom.resn;
   document.getElementById('atom-info').innerHTML =
     `<span class="aa-code" style="color:${chainColor(atom.chain,'base')}">${aa1}</span>` +
-    `<b>${atom.resname}</b> · ${name}<br>` +
+    `<b>${atom.resn}</b> · ${name}<br>` +
     `Residue <b>${atom.resi}</b> · Chain <b>${atom.chain}</b>`;
   document.getElementById('atom-info-bar').style.display = 'block';
 }
