@@ -162,6 +162,35 @@ function findInterfaceResidues(residues, cutoff) {
   return result;
 }
 
+app.get('/api/structure/:pair/:model/sequence', requireAuth, (req, res) => {
+  try {
+    const { pair, model } = req.params;
+    const models = getModelsForPair(pair);
+    const entry  = models.find(m => m.model === parseInt(model, 10));
+    if (!entry) return res.status(404).json({ error: 'Model not found' });
+
+    const pdbText = fs.readFileSync(path.join(getPairDataDir(pair), entry.file), 'utf8');
+    const chains  = {};
+    for (const line of pdbText.split('\n')) {
+      if (!/^ATOM/.test(line)) continue;
+      const chain = line[21];
+      const resi  = parseInt(line.substring(22, 26).trim(), 10);
+      const resn  = line.substring(17, 20).trim();
+      if (!chains[chain]) chains[chain] = new Map();
+      if (!chains[chain].has(resi)) chains[chain].set(resi, resn);
+    }
+    const result = {};
+    for (const [chain, map] of Object.entries(chains)) {
+      result[chain] = [...map.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([resi, resn]) => ({ resi, resn }));
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/structure/:pair/:model/interface', requireAuth, (req, res) => {
   try {
     const { pair, model } = req.params;

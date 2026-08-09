@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Protein Structure Viewer</title>
+<title>Protein-protein interaction viewer</title>
 <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -135,6 +135,47 @@
   .viewer-placeholder svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: .4; }
   .viewer-placeholder p { font-size: 0.95rem; }
 
+  /* Viewer column (3D + sequence stacked) */
+  .viewer-column { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+  /* Sequence panel */
+  #sequence-panel {
+    display: none; height: 190px; background: #13171f;
+    border-top: 1px solid #2d3748; flex-direction: column;
+  }
+  #sequence-panel.visible { display: flex; }
+  .seq-panel-header {
+    padding: 7px 14px; border-bottom: 1px solid #2d3748;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .seq-panel-header span {
+    font-size: .68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .08em; color: #475569;
+  }
+  .seq-panel-body { flex: 1; overflow-y: auto; padding: 10px 16px; }
+  .seq-chain { margin-bottom: 14px; }
+  .seq-chain-label {
+    font-size: .7rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; margin-bottom: 5px;
+  }
+  .seq-track { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0; line-height: 1; }
+  .seq-res {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 20px; font-size: 11px; font-family: 'Courier New', monospace;
+    cursor: pointer; border-radius: 2px; color: #4b5563;
+    transition: background .1s, color .1s; position: relative;
+  }
+  .seq-res:hover { background: #2d3748; color: #e2e8f0; }
+  .seq-res.labeled { background: #FFD700; color: #000 !important; font-weight: 700; border-radius: 3px; }
+  .seq-res.iface { border-bottom: 2px solid; }
+  .seq-num {
+    display: inline-flex; align-items: flex-end;
+    font-size: 9px; font-family: monospace; color: #374151;
+    width: 15px; height: 20px; justify-content: center;
+    padding-bottom: 1px; pointer-events: none;
+  }
+
   /* Viewer floating controls */
   .viewer-controls {
     position: absolute; bottom: 16px; right: 16px;
@@ -215,8 +256,8 @@
 <!-- ── Login ── -->
 <div id="login-screen">
   <div class="login-card">
-    <h1>🧬 Protein Viewer</h1>
-    <p>AlphaFold Multimer structure explorer</p>
+    <h1>🧬 Protein-protein interaction viewer</h1>
+    <p>Structure explorer</p>
     <div class="field">
       <label>Username</label>
       <input type="text" id="username" autocomplete="username" placeholder="admin">
@@ -234,7 +275,7 @@
 <div id="app">
   <div class="sidebar">
     <div class="sidebar-header">
-      <h2>🧬 Protein Viewer</h2>
+      <h2>🧬 PPI Viewer</h2>
       <button class="logout-btn" onclick="logout()">Logout</button>
     </div>
     <div class="sidebar-body">
@@ -272,7 +313,7 @@
               <span>Structure</span>
             </label>
             <label class="color-swatch">
-              <input type="color" id="color-A-iface" value="#003F6B" oninput="onColorChange()">
+              <input type="color" id="color-A-iface" value="#56B4E9" oninput="onColorChange()">
               <span>Interface</span>
             </label>
           </div>
@@ -285,7 +326,7 @@
               <span>Structure</span>
             </label>
             <label class="color-swatch">
-              <input type="color" id="color-B-iface" value="#A65F00" oninput="onColorChange()">
+              <input type="color" id="color-B-iface" value="#FFD700" oninput="onColorChange()">
               <span>Interface</span>
             </label>
           </div>
@@ -317,6 +358,7 @@
     </div>
   </div>
 
+  <div class="viewer-column">
   <div class="viewer-wrap">
     <div id="viewer"></div>
     <div class="viewer-placeholder" id="placeholder">
@@ -340,6 +382,7 @@
       <button class="ctrl-btn" onclick="zoomOut()"    title="Zoom out">−</button>
       <button class="ctrl-btn" id="btn-spin" onclick="toggleSpin()" title="Toggle spin">↻</button>
       <button class="ctrl-btn" onclick="clearLabels()" title="Clear all labels">✕</button>
+      <button class="ctrl-btn" id="btn-seq" onclick="toggleSequence()" title="Show/hide sequences">≡</button>
     </div>
 
     <!-- Last-clicked atom info (bottom-left) -->
@@ -347,6 +390,24 @@
       <div id="atom-info"></div>
     </div>
   </div>
+
+  <!-- Sequence panel (below viewer) -->
+  <div id="sequence-panel">
+    <div class="seq-panel-header">
+      <span>Protein Sequences</span>
+      <button onclick="toggleSequence()" style="
+        background:none; border:1px solid #2d3748; border-radius:5px;
+        color:#64748b; font-size:.7rem; padding:2px 8px; cursor:pointer;">
+        Hide
+      </button>
+    </div>
+    <div class="seq-panel-body" id="seq-panel-body">
+      <div style="color:#475569;font-style:italic;font-size:.82rem">
+        Load a structure to view sequences
+      </div>
+    </div>
+  </div>
+  </div><!-- end .viewer-column -->
 
   <!-- Selected residues panel (right of viewer, shown when residues are selected) -->
   <div id="selection-panel" style="
@@ -384,6 +445,8 @@ let interfaceData = null;
 let structureLoaded = false;
 let activeLabels = {};   // "chain:resi" → 3Dmol label object
 let spinning = false;
+let sequenceData = null;
+let sequenceVisible = false;
 
 const AA3TO1 = {
   ALA:'A', ARG:'R', ASN:'N', ASP:'D', CYS:'C', GLN:'Q', GLU:'E',
@@ -399,8 +462,8 @@ const AA_NAME = {
 };
 
 const DEFAULTS = {
-  'color-A-base': '#0072B2', 'color-A-iface': '#003F6B',
-  'color-B-base': '#E69F00', 'color-B-iface': '#A65F00'
+  'color-A-base': '#0072B2', 'color-A-iface': '#56B4E9',
+  'color-B-base': '#E69F00', 'color-B-iface': '#FFD700'
 };
 // Fallback colours for chains C/D/E
 const EXTRA_BASE  = ['#a3e635', '#fb923c', '#c084fc'];
@@ -615,6 +678,8 @@ async function loadStructure() {
     viewer.render();
     document.getElementById('interface-section').style.display = 'block';
     setStatus(`Loaded: ${selectedPair} · Model ${selectedModel}`, 'ok');
+    sequenceData = null;
+    loadSequence();
   } catch (err) {
     setStatus('Error: ' + err.message, 'error');
   } finally {
@@ -660,6 +725,7 @@ function setupClickHandler() {
     viewer.render();
     updateAtomInfoBar(atom);
     updateSelectionPanel();
+    updateSequenceHighlight();
   });
 }
 
@@ -725,6 +791,7 @@ function toggleResidueLabel(chain, resi) {
     delete activeLabels[key];
     viewer.render();
     updateSelectionPanel();
+    updateSequenceHighlight();
     if (!Object.keys(activeLabels).length)
       document.getElementById('atom-info-bar').style.display = 'none';
   }
@@ -736,6 +803,7 @@ function clearLabels() {
   viewer.render();
   document.getElementById('atom-info-bar').style.display = 'none';
   updateSelectionPanel();
+  updateSequenceHighlight();
 }
 
 // ── Interface ─────────────────────────────────────────────────────────────────
@@ -764,6 +832,98 @@ function clearInterface() {
   interfaceData = null;
   document.getElementById('iface-status').textContent = '';
   applyStyle();
+}
+
+// ── Sequence viewer ───────────────────────────────────────────────────────────
+async function loadSequence() {
+  if (!selectedPair || selectedModel === null) return;
+  const data = await apiGet(
+    `/api/structure/${encodeURIComponent(selectedPair)}/${selectedModel}/sequence`
+  );
+  if (!data) return;
+  sequenceData = data;
+  renderSequence();
+}
+
+function toggleSequence() {
+  sequenceVisible = !sequenceVisible;
+  document.getElementById('sequence-panel').classList.toggle('visible', sequenceVisible);
+  document.getElementById('btn-seq').classList.toggle('active', sequenceVisible);
+  if (sequenceVisible && sequenceData) renderSequence();
+}
+
+function renderSequence() {
+  const body = document.getElementById('seq-panel-body');
+  if (!sequenceData) return;
+
+  let html = '';
+  for (const [chain, residues] of Object.entries(sequenceData).sort()) {
+    const col = chainColor(chain, 'base');
+    html += `<div class="seq-chain">
+      <div class="seq-chain-label" style="color:${col}">
+        Chain ${chain} · ${residues.length} residues
+      </div>
+      <div class="seq-track" id="seq-track-${chain}">`;
+
+    residues.forEach(({ resi, resn }, idx) => {
+      const aa1     = AA3TO1[resn] || '?';
+      const labeled = !!activeLabels[`${chain}:${resi}`];
+      const iface   = interfaceData && (interfaceData[chain] || []).includes(resi);
+      html += `<span
+        class="seq-res${labeled ? ' labeled' : ''}${iface ? ' iface' : ''}"
+        id="seq-${chain}-${resi}"
+        style="${iface ? `border-color:${chainColor(chain,'iface')}` : `color:${col}55`}"
+        title="${resn} ${resi}"
+        onclick="clickSeqResidue('${chain}',${resi},'${resn}')">
+          ${aa1}
+        </span>`;
+      // Position tick every 10 residues
+      if ((idx + 1) % 10 === 0)
+        html += `<span class="seq-num">${resi}</span>`;
+    });
+
+    html += `</div></div>`;
+  }
+  body.innerHTML = html;
+}
+
+function updateSequenceHighlight() {
+  if (!sequenceData || !sequenceVisible) return;
+  for (const [chain, residues] of Object.entries(sequenceData)) {
+    residues.forEach(({ resi }) => {
+      const el = document.getElementById(`seq-${chain}-${resi}`);
+      if (!el) return;
+      el.classList.toggle('labeled', !!activeLabels[`${chain}:${resi}`]);
+    });
+  }
+}
+
+function clickSeqResidue(chain, resi, resn) {
+  // Mirror a click as if it happened in the 3D viewer
+  const key = `${chain}:${resi}`;
+  if (activeLabels[key]) {
+    viewer.removeLabel(activeLabels[key]);
+    delete activeLabels[key];
+    viewer.render();
+  } else {
+    // Find the atom coords from the model to place the label
+    const atoms = viewer.selectedAtoms({ chain, resi });
+    if (atoms && atoms.length) {
+      const atom = atoms[0];
+      const col  = chainColor(chain, 'base');
+      activeLabels[key] = viewer.addLabel(`${resn} ${resi} · ${chain}`, {
+        position: { x: atom.x, y: atom.y, z: atom.z },
+        backgroundColor: 'black', backgroundOpacity: 0.75,
+        fontColor: col, fontSize: 12, padding: 4,
+        borderThickness: 1, borderColor: col,
+        inFront: true, showBackground: true
+      });
+      viewer.render();
+      updateAtomInfoBar({ resn, resi, chain, x: atom.x, y: atom.y, z: atom.z });
+    }
+  }
+  updateSequenceHighlight();
+  updateSelectionPanel();
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
