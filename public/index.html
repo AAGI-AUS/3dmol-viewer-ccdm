@@ -135,6 +135,35 @@
   .viewer-placeholder svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: .4; }
   .viewer-placeholder p { font-size: 0.95rem; }
 
+  /* Viewer floating controls */
+  .viewer-controls {
+    position: absolute; bottom: 16px; right: 16px;
+    display: flex; flex-direction: column; gap: 6px; z-index: 5;
+  }
+  .ctrl-btn {
+    width: 36px; height: 36px; background: rgba(22,27,46,.88);
+    border: 1px solid #374151; border-radius: 8px; color: #94a3b8;
+    font-size: 1.05rem; cursor: pointer; display: flex;
+    align-items: center; justify-content: center;
+    transition: all .15s; backdrop-filter: blur(4px);
+    user-select: none;
+  }
+  .ctrl-btn:hover  { border-color: #3b82f6; color: #60a5fa; }
+  .ctrl-btn.active { border-color: #6366f1; color: #a5b4fc; background: rgba(30,27,75,.88); }
+
+  /* Atom info bar */
+  .atom-info-bar {
+    position: absolute; bottom: 16px; left: 16px;
+    background: rgba(15,17,23,.88); border: 1px solid #374151;
+    border-radius: 8px; padding: 8px 14px; font-size: .82rem;
+    color: #94a3b8; backdrop-filter: blur(4px); z-index: 5;
+    max-width: 300px; line-height: 1.5; display: none;
+  }
+  .atom-info-bar b { color: #e2e8f0; }
+  .atom-info-bar .aa-code {
+    font-size: 1rem; font-weight: 700; margin-right: 4px;
+  }
+
   /* Spinner */
   .spinner {
     position: absolute; inset: 0; background: rgba(10,13,20,.7);
@@ -303,6 +332,44 @@
       <p>Select a protein pair and model to view</p>
     </div>
     <div class="spinner" id="spinner"><div class="spin"></div></div>
+
+    <!-- Floating viewer controls (bottom-right) -->
+    <div class="viewer-controls">
+      <button class="ctrl-btn" onclick="zoomIn()"     title="Zoom in">+</button>
+      <button class="ctrl-btn" onclick="resetZoom()"  title="Reset view">⊙</button>
+      <button class="ctrl-btn" onclick="zoomOut()"    title="Zoom out">−</button>
+      <button class="ctrl-btn" id="btn-spin" onclick="toggleSpin()" title="Toggle spin">↻</button>
+      <button class="ctrl-btn" onclick="clearLabels()" title="Clear all labels">✕</button>
+    </div>
+
+    <!-- Last-clicked atom info (bottom-left) -->
+    <div class="atom-info-bar" id="atom-info-bar">
+      <div id="atom-info"></div>
+    </div>
+  </div>
+
+  <!-- Selected residues panel (right of viewer, shown when residues are selected) -->
+  <div id="selection-panel" style="
+    width:220px; min-width:200px; background:#1a1f2e;
+    border-left:1px solid #2d3748; display:none; flex-direction:column;
+    overflow:hidden;">
+    <div style="padding:14px 16px 10px; border-bottom:1px solid #2d3748;
+                display:flex; align-items:center; justify-content:space-between;">
+      <span style="font-size:.75rem;font-weight:700;letter-spacing:.08em;
+                   text-transform:uppercase;color:#475569">Selected</span>
+      <button onclick="clearLabels()" style="
+        background:none; border:1px solid #2d3748; border-radius:5px;
+        color:#64748b; font-size:.7rem; padding:2px 8px; cursor:pointer;">
+        Clear all
+      </button>
+    </div>
+    <div id="selection-list" style="
+      flex:1; overflow-y:auto; padding:8px 10px; font-size:.82rem;
+      color:#94a3b8; line-height:1.6;">
+      <div style="color:#475569;font-style:italic;padding:4px 2px">
+        Click residues in the viewer
+      </div>
+    </div>
   </div>
 </div>
 
@@ -315,6 +382,21 @@ let viewer = null;
 let allPairs = [];
 let interfaceData = null;
 let structureLoaded = false;
+let activeLabels = {};   // "chain:resi" → 3Dmol label object
+let spinning = false;
+
+const AA3TO1 = {
+  ALA:'A', ARG:'R', ASN:'N', ASP:'D', CYS:'C', GLN:'Q', GLU:'E',
+  GLY:'G', HIS:'H', ILE:'I', LEU:'L', LYS:'K', MET:'M', PHE:'F',
+  PRO:'P', SER:'S', THR:'T', TRP:'W', TYR:'Y', VAL:'V'
+};
+const AA_NAME = {
+  ALA:'Alanine', ARG:'Arginine', ASN:'Asparagine', ASP:'Aspartate',
+  CYS:'Cysteine', GLN:'Glutamine', GLU:'Glutamate', GLY:'Glycine',
+  HIS:'Histidine', ILE:'Isoleucine', LEU:'Leucine', LYS:'Lysine',
+  MET:'Methionine', PHE:'Phenylalanine', PRO:'Proline', SER:'Serine',
+  THR:'Threonine', TRP:'Tryptophan', TYR:'Tyrosine', VAL:'Valine'
+};
 
 const DEFAULTS = {
   'color-A-base': '#60a5fa', 'color-A-iface': '#00e5ff',
@@ -522,11 +604,13 @@ async function loadStructure() {
     viewer.clear();
     interfaceData = null;
     structureLoaded = false;
+    clearLabels();
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('iface-status').textContent = '';
     viewer.addModel(text, fmt);
     structureLoaded = true;
     applyStyle();
+    setupClickHandler();
     viewer.zoomTo();
     viewer.render();
     document.getElementById('interface-section').style.display = 'block';
@@ -536,6 +620,122 @@ async function loadStructure() {
   } finally {
     showSpinner(false);
   }
+}
+
+// ── Zoom / Spin ───────────────────────────────────────────────────────────────
+function zoomIn()    { viewer.zoom(1.2, 400); }
+function zoomOut()   { viewer.zoom(0.8, 400); }
+function resetZoom() { viewer.zoomTo({}, 500); viewer.render(); }
+
+function toggleSpin() {
+  spinning = !spinning;
+  viewer.spin(spinning ? 'y' : false);
+  document.getElementById('btn-spin').classList.toggle('active', spinning);
+}
+
+// ── Click annotation ──────────────────────────────────────────────────────────
+function setupClickHandler() {
+  viewer.setClickable({}, true, function(atom) {
+    const key = `${atom.chain}:${atom.resi}`;
+
+    if (activeLabels[key]) {
+      viewer.removeLabel(activeLabels[key]);
+      delete activeLabels[key];
+    } else {
+      const col   = chainColor(atom.chain, 'base');
+      const label = `${atom.resname} ${atom.resi} · ${atom.chain}`;
+      activeLabels[key] = viewer.addLabel(label, {
+        position:          { x: atom.x, y: atom.y, z: atom.z },
+        backgroundColor:   'black',
+        backgroundOpacity: 0.75,
+        fontColor:         col,
+        fontSize:          12,
+        padding:           4,
+        borderThickness:   1,
+        borderColor:       col,
+        inFront:           true,
+        showBackground:    true
+      });
+    }
+    viewer.render();
+    updateAtomInfoBar(atom);
+    updateSelectionPanel();
+  });
+}
+
+function updateAtomInfoBar(atom) {
+  const aa1  = AA3TO1[atom.resname]  || '?';
+  const name = AA_NAME[atom.resname] || atom.resname;
+  document.getElementById('atom-info').innerHTML =
+    `<span class="aa-code" style="color:${chainColor(atom.chain,'base')}">${aa1}</span>` +
+    `<b>${atom.resname}</b> · ${name}<br>` +
+    `Residue <b>${atom.resi}</b> · Chain <b>${atom.chain}</b>`;
+  document.getElementById('atom-info-bar').style.display = 'block';
+}
+
+function updateSelectionPanel() {
+  const panel = document.getElementById('selection-panel');
+  const list  = document.getElementById('selection-list');
+  const keys  = Object.keys(activeLabels);
+
+  if (!keys.length) {
+    panel.style.display = 'none';
+    list.innerHTML = '<div style="color:#475569;font-style:italic;padding:4px 2px">Click residues in the viewer</div>';
+    return;
+  }
+
+  panel.style.display = 'flex';
+
+  // Group by chain
+  const byChain = {};
+  keys.forEach(k => {
+    const [chain, resi] = k.split(':');
+    if (!byChain[chain]) byChain[chain] = [];
+    byChain[chain].push(parseInt(resi));
+  });
+
+  let html = '';
+  for (const [chain, resis] of Object.entries(byChain).sort()) {
+    resis.sort((a, b) => a - b);
+    const col = chainColor(chain, 'base');
+    html += `<div style="margin-bottom:10px">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;
+                  letter-spacing:.07em;color:${col};margin-bottom:4px">
+        Chain ${chain} · ${resis.length} residue${resis.length > 1 ? 's' : ''}
+      </div>`;
+    resis.forEach(resi => {
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;
+                           padding:3px 6px;border-radius:4px;margin-bottom:2px;
+                           background:#0f1117;cursor:pointer"
+                    onclick="toggleResidueLabel('${chain}',${resi})"
+                    title="Click to remove label">
+        <span><b>${resi}</b></span>
+        <span style="color:#475569;font-size:.75rem">✕</span>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  list.innerHTML = html;
+}
+
+function toggleResidueLabel(chain, resi) {
+  const key = `${chain}:${resi}`;
+  if (activeLabels[key]) {
+    viewer.removeLabel(activeLabels[key]);
+    delete activeLabels[key];
+    viewer.render();
+    updateSelectionPanel();
+    if (!Object.keys(activeLabels).length)
+      document.getElementById('atom-info-bar').style.display = 'none';
+  }
+}
+
+function clearLabels() {
+  Object.values(activeLabels).forEach(l => viewer.removeLabel(l));
+  activeLabels = {};
+  viewer.render();
+  document.getElementById('atom-info-bar').style.display = 'none';
+  updateSelectionPanel();
 }
 
 // ── Interface ─────────────────────────────────────────────────────────────────
