@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Protein Structure Viewer</title>
+<script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: #0f1117; color: #e2e8f0; height: 100vh; overflow: hidden; }
+
+  /* ── Login ── */
+  #login-screen {
+    display: flex; align-items: center; justify-content: center;
+    height: 100vh; background: #0f1117;
+  }
+  .login-card {
+    background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px;
+    padding: 40px; width: 380px;
+  }
+  .login-card h1 { font-size: 1.5rem; margin-bottom: 6px; color: #fff; }
+  .login-card p  { color: #64748b; font-size: 0.875rem; margin-bottom: 28px; }
+  .field label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px; letter-spacing: .05em; text-transform: uppercase; }
+  .field input {
+    width: 100%; padding: 10px 14px; background: #0f1117;
+    border: 1px solid #2d3748; border-radius: 8px; color: #e2e8f0;
+    font-size: 0.95rem; outline: none; transition: border-color .2s;
+  }
+  .field input:focus { border-color: #3b82f6; }
+  .field { margin-bottom: 16px; }
+  .login-btn {
+    width: 100%; padding: 11px; background: #3b82f6; border: none;
+    border-radius: 8px; color: #fff; font-size: 1rem; font-weight: 600;
+    cursor: pointer; margin-top: 8px; transition: background .2s;
+  }
+  .login-btn:hover { background: #2563eb; }
+  .error-msg { color: #f87171; font-size: 0.85rem; margin-top: 12px; text-align: center; min-height: 20px; }
+
+  /* ── Main app ── */
+  #app { display: none; height: 100vh; }
+  #app.visible { display: flex; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 320px; min-width: 280px; background: #1a1f2e;
+    border-right: 1px solid #2d3748; display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-header {
+    padding: 18px 20px 14px; border-bottom: 1px solid #2d3748;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sidebar-header h2 { font-size: 1rem; font-weight: 600; color: #fff; }
+  .logout-btn {
+    background: none; border: 1px solid #2d3748; border-radius: 6px;
+    color: #64748b; font-size: 0.75rem; padding: 4px 10px; cursor: pointer;
+  }
+  .logout-btn:hover { color: #f87171; border-color: #f87171; }
+
+  .sidebar-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+  .section-label {
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: .08em;
+    color: #475569; margin-bottom: 8px; font-weight: 600;
+  }
+
+  /* Search */
+  .search-wrap { position: relative; margin-bottom: 12px; }
+  .search-input {
+    width: 100%; padding: 9px 12px 9px 36px; background: #0f1117;
+    border: 1px solid #2d3748; border-radius: 8px; color: #e2e8f0;
+    font-size: 0.9rem; outline: none;
+  }
+  .search-input:focus { border-color: #3b82f6; }
+  .search-icon {
+    position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+    color: #475569; pointer-events: none; font-size: 0.9rem;
+  }
+
+  /* Pair list */
+  .pair-list { max-height: 220px; overflow-y: auto; margin-bottom: 18px; }
+  .pair-item {
+    padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
+    color: #94a3b8; transition: all .15s; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pair-item:hover { background: #2d3748; color: #e2e8f0; }
+  .pair-item.selected { background: #1e3a5f; color: #60a5fa; font-weight: 600; }
+  .pair-empty { color: #475569; font-size: 0.85rem; padding: 8px 0; }
+
+  /* Model selector */
+  .model-section { margin-bottom: 20px; }
+  .model-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+  .model-btn {
+    flex: 1; min-width: 48px; padding: 8px 4px; background: #0f1117;
+    border: 1px solid #2d3748; border-radius: 6px; color: #64748b;
+    font-size: 0.85rem; cursor: pointer; text-align: center; transition: all .15s;
+  }
+  .model-btn:hover:not(:disabled) { border-color: #3b82f6; color: #60a5fa; }
+  .model-btn.active { background: #1e3a5f; border-color: #3b82f6; color: #60a5fa; font-weight: 700; }
+  .model-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* Style selector */
+  .style-row { display: flex; gap: 8px; margin-bottom: 18px; }
+  .style-btn {
+    flex: 1; padding: 7px 4px; background: #0f1117;
+    border: 1px solid #2d3748; border-radius: 6px; color: #64748b;
+    font-size: 0.8rem; cursor: pointer; text-align: center; transition: all .15s;
+  }
+  .style-btn:hover { border-color: #6366f1; color: #a5b4fc; }
+  .style-btn.active { background: #1e1b4b; border-color: #6366f1; color: #a5b4fc; font-weight: 700; }
+
+  /* Load button */
+  .load-btn {
+    width: 100%; padding: 11px; background: #3b82f6; border: none;
+    border-radius: 8px; color: #fff; font-size: 0.95rem; font-weight: 600;
+    cursor: pointer; transition: background .2s;
+  }
+  .load-btn:hover:not(:disabled) { background: #2563eb; }
+  .load-btn:disabled { background: #1e3a5f; color: #475569; cursor: not-allowed; }
+
+  .status-msg { margin-top: 10px; font-size: 0.8rem; color: #64748b; text-align: center; min-height: 18px; }
+  .status-msg.error { color: #f87171; }
+  .status-msg.ok { color: #4ade80; }
+
+  /* Viewer */
+  .viewer-wrap { flex: 1; position: relative; background: #0a0d14; }
+  #viewer { width: 100%; height: 100%; }
+  .viewer-placeholder {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #2d3748;
+    pointer-events: none;
+  }
+  .viewer-placeholder svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: .4; }
+  .viewer-placeholder p { font-size: 0.95rem; }
+
+  /* Spinner */
+  .spinner {
+    position: absolute; inset: 0; background: rgba(10,13,20,.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10; display: none;
+  }
+  .spinner.active { display: flex; }
+  .spin {
+    width: 40px; height: 40px; border: 3px solid #2d3748;
+    border-top-color: #3b82f6; border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Color pickers */
+  .color-section { margin-bottom: 18px; }
+  .color-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  }
+  .chain-tag {
+    font-size: .78rem; font-weight: 700; color: #fff;
+    background: #2d3748; border-radius: 4px; padding: 2px 7px;
+    width: 44px; text-align: center; flex-shrink: 0;
+  }
+  .color-swatches { display: flex; gap: 10px; flex: 1; }
+  .color-swatch {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: .68rem; color: #64748b; cursor: pointer; flex: 1;
+  }
+  .color-swatch input[type="color"] {
+    width: 100%; height: 30px; border: 1px solid #2d3748; border-radius: 6px;
+    background: none; cursor: pointer; padding: 2px 3px;
+  }
+  .color-swatch input[type="color"]:hover { border-color: #6366f1; }
+  .color-reset {
+    background: none; border: 1px solid #2d3748; border-radius: 6px;
+    color: #64748b; font-size: .72rem; padding: 4px 8px; cursor: pointer;
+    width: 100%; margin-top: 4px;
+  }
+  .color-reset:hover { border-color: #94a3b8; color: #e2e8f0; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <h1>🧬 Protein Viewer</h1>
+    <p>AlphaFold Multimer structure explorer</p>
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="username" autocomplete="username" placeholder="admin">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" autocomplete="current-password">
+    </div>
+    <button class="login-btn" onclick="login()">Sign In</button>
+    <div class="error-msg" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ── Main App ── -->
+<div id="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>🧬 Protein Viewer</h2>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+    <div class="sidebar-body">
+
+      <div class="section-label">Search Protein Pair</div>
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input class="search-input" id="search-input" placeholder="Type protein name…" oninput="onSearch(this.value)">
+      </div>
+      <div class="pair-list" id="pair-list">
+        <div class="pair-empty">Loading pairs…</div>
+      </div>
+
+      <div class="section-label">AlphaFold Model</div>
+      <div class="model-section">
+        <div class="model-grid" id="model-grid">
+          <!-- populated dynamically -->
+        </div>
+      </div>
+
+      <div class="section-label">Display Style</div>
+      <div class="style-row">
+        <button class="style-btn active" onclick="setStyle('cartoon')" id="style-cartoon">Cartoon</button>
+        <button class="style-btn" onclick="setStyle('stick')"    id="style-stick">Stick</button>
+        <button class="style-btn" onclick="setStyle('sphere')"   id="style-sphere">Surface</button>
+      </div>
+
+      <div class="section-label">Colors</div>
+      <div class="color-section">
+        <div class="color-row">
+          <span class="chain-tag">A</span>
+          <div class="color-swatches">
+            <label class="color-swatch">
+              <input type="color" id="color-A-base"  value="#60a5fa" oninput="onColorChange()">
+              <span>Structure</span>
+            </label>
+            <label class="color-swatch">
+              <input type="color" id="color-A-iface" value="#00e5ff" oninput="onColorChange()">
+              <span>Interface</span>
+            </label>
+          </div>
+        </div>
+        <div class="color-row">
+          <span class="chain-tag">B</span>
+          <div class="color-swatches">
+            <label class="color-swatch">
+              <input type="color" id="color-B-base"  value="#f472b6" oninput="onColorChange()">
+              <span>Structure</span>
+            </label>
+            <label class="color-swatch">
+              <input type="color" id="color-B-iface" value="#ff6d00" oninput="onColorChange()">
+              <span>Interface</span>
+            </label>
+          </div>
+        </div>
+        <button class="color-reset" onclick="resetColors()">Reset to defaults</button>
+      </div>
+
+      <button class="load-btn" id="load-btn" onclick="loadStructure()" disabled>Load Structure</button>
+      <div class="status-msg" id="status"></div>
+
+      <!-- Interface section — shown after a structure loads -->
+      <div id="interface-section" style="display:none;margin-top:18px">
+        <div class="section-label">Interface Residues</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <label style="font-size:.8rem;color:#94a3b8;white-space:nowrap">Cutoff (Å)</label>
+          <input id="cutoff-input" type="number" value="10" min="2" max="30" step="0.5"
+            style="width:64px;padding:5px 8px;background:#0f1117;border:1px solid #2d3748;
+                   border-radius:6px;color:#e2e8f0;font-size:.85rem;outline:none">
+        </div>
+        <button class="load-btn" style="background:#6366f1;margin-bottom:8px" onclick="loadInterface()">
+          Highlight Interface
+        </button>
+        <button class="load-btn" style="background:#1f2937;font-size:.82rem;padding:7px" onclick="clearInterface()">
+          Clear Highlight
+        </button>
+        <div id="iface-status" style="font-size:.78rem;color:#64748b;margin-top:10px;line-height:1.7;white-space:pre-line"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="viewer-wrap">
+    <div id="viewer"></div>
+    <div class="viewer-placeholder" id="placeholder">
+      <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="30" stroke="currentColor" stroke-width="4"/>
+        <circle cx="50" cy="20" r="8"  fill="currentColor"/>
+        <circle cx="76" cy="65" r="8"  fill="currentColor"/>
+        <circle cx="24" cy="65" r="8"  fill="currentColor"/>
+        <line x1="50" y1="28" x2="68" y2="58" stroke="currentColor" stroke-width="3"/>
+        <line x1="32" y1="58" x2="50" y2="28" stroke="currentColor" stroke-width="3"/>
+        <line x1="32" y1="65" x2="68" y2="65" stroke="currentColor" stroke-width="3"/>
+      </svg>
+      <p>Select a protein pair and model to view</p>
+    </div>
+    <div class="spinner" id="spinner"><div class="spin"></div></div>
+  </div>
+</div>
+
+<script>
+let token = sessionStorage.getItem('token') || null;
+let selectedPair = null;
+let selectedModel = null;
+let currentStyle = 'cartoon';
+let viewer = null;
+let allPairs = [];
+let interfaceData = null;
+let structureLoaded = false;
+
+const DEFAULTS = {
+  'color-A-base': '#60a5fa', 'color-A-iface': '#00e5ff',
+  'color-B-base': '#f472b6', 'color-B-iface': '#ff6d00'
+};
+// Fallback colours for chains C/D/E
+const EXTRA_BASE  = ['#a3e635', '#fb923c', '#c084fc'];
+const EXTRA_IFACE = ['#76ff03', '#ffd600', '#e040fb'];
+
+function getColors() {
+  return {
+    A: { base: document.getElementById('color-A-base').value,
+         iface: document.getElementById('color-A-iface').value },
+    B: { base: document.getElementById('color-B-base').value,
+         iface: document.getElementById('color-B-iface').value }
+  };
+}
+
+function onColorChange() {
+  if (structureLoaded) applyStyle();
+}
+
+function resetColors() {
+  for (const [id, val] of Object.entries(DEFAULTS))
+    document.getElementById(id).value = val;
+  if (structureLoaded) applyStyle();
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function login() {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await r.json();
+    if (!r.ok) { errEl.textContent = data.error || 'Login failed'; return; }
+    token = data.token;
+    sessionStorage.setItem('token', token);
+    showApp();
+  } catch {
+    errEl.textContent = 'Connection error';
+  }
+}
+
+function logout() {
+  token = null;
+  sessionStorage.removeItem('token');
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display = 'flex';
+  if (viewer) { viewer.clear(); viewer = null; }
+}
+
+document.getElementById('password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+
+  // Init 3Dmol viewer
+  viewer = $3Dmol.createViewer(document.getElementById('viewer'), {
+    backgroundColor: '#0a0d14'
+  });
+
+  await loadPairs();
+}
+
+// ── Pairs ─────────────────────────────────────────────────────────────────────
+async function loadPairs(search = '') {
+  const url = '/api/pairs' + (search ? `?search=${encodeURIComponent(search)}` : '');
+  try {
+    const r = await apiGet(url);
+    if (!r) return;
+    allPairs = r.pairs;
+    renderPairs(r.pairs);
+  } catch {}
+}
+
+function renderPairs(pairs) {
+  const el = document.getElementById('pair-list');
+  if (!pairs.length) {
+    el.innerHTML = '<div class="pair-empty">No pairs found</div>';
+    return;
+  }
+  el.innerHTML = pairs.map(p =>
+    `<div class="pair-item${p === selectedPair ? ' selected' : ''}"
+          onclick="selectPair('${p.replace(/'/g, "\\'")}')"
+          title="${p}">${p}</div>`
+  ).join('');
+}
+
+async function selectPair(pair) {
+  selectedPair = pair;
+  selectedModel = null;
+  renderPairs(allPairs.length ? allPairs : [pair]);
+
+  // Load models for this pair
+  const data = await apiGet(`/api/models/${encodeURIComponent(pair)}`);
+  renderModels(data ? data.models : []);
+  updateLoadBtn();
+}
+
+function renderModels(models) {
+  const grid = document.getElementById('model-grid');
+  if (!models.length) {
+    grid.innerHTML = '<span style="color:#475569;font-size:.85rem">No models found</span>';
+    return;
+  }
+  // Ensure 0-4 buttons, disable ones not available
+  grid.innerHTML = [0,1,2,3,4].map(n => {
+    const avail = models.includes(n);
+    return `<button class="model-btn${n === selectedModel ? ' active' : ''}"
+              onclick="selectModel(${n})" ${avail ? '' : 'disabled'}>
+              ${n}
+            </button>`;
+  }).join('');
+}
+
+function selectModel(n) {
+  selectedModel = n;
+  document.querySelectorAll('.model-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === n);
+  });
+  updateLoadBtn();
+}
+
+function updateLoadBtn() {
+  document.getElementById('load-btn').disabled = !(selectedPair && selectedModel !== null);
+}
+
+// ── Search ────────────────────────────────────────────────────────────────────
+let searchTimer;
+function onSearch(val) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadPairs(val), 300);
+}
+
+// ── Style ─────────────────────────────────────────────────────────────────────
+function setStyle(style) {
+  currentStyle = style;
+  document.querySelectorAll('.style-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('style-' + style).classList.add('active');
+  if (viewer && viewer.getModel()) applyStyle();
+}
+
+function chainColor(chain, type) {
+  const colors = getColors();
+  if (colors[chain]) return colors[chain][type];
+  const extra = type === 'base' ? EXTRA_BASE : EXTRA_IFACE;
+  const idx = ['C','D','E'].indexOf(chain);
+  return extra[idx] || '#ffffff';
+}
+
+function applyStyle() {
+  viewer.setStyle({}, {});
+  const chains = ['A','B','C','D','E'];
+  if (currentStyle === 'cartoon') {
+    chains.forEach(c =>
+      viewer.setStyle({ chain: c }, { cartoon: { color: chainColor(c, 'base') } }));
+  } else if (currentStyle === 'stick') {
+    chains.forEach(c =>
+      viewer.setStyle({ chain: c }, { stick: { color: chainColor(c, 'base'), radius: 0.15 } }));
+  } else {
+    viewer.setStyle({}, { sphere: { colorscheme: 'chainHetatm', scale: 0.4 } });
+  }
+  if (interfaceData) applyInterfaceOverlay();
+  else viewer.render();
+}
+
+function applyInterfaceOverlay() {
+  if (!interfaceData || !viewer) return;
+  for (const [chain, resi] of Object.entries(interfaceData)) {
+    if (!resi.length) continue;
+    const col = chainColor(chain, 'iface');
+    viewer.addStyle({ chain, resi }, { cartoon: { color: col } });
+    viewer.addStyle({ chain, resi }, { stick: { color: col, radius: 0.18 } });
+  }
+  viewer.render();
+}
+
+// ── Load structure ────────────────────────────────────────────────────────────
+async function loadStructure() {
+  if (!selectedPair || selectedModel === null) return;
+
+  setStatus('Loading…', '');
+  showSpinner(true);
+
+  try {
+    const resp = await fetch(
+      `/api/structure/${encodeURIComponent(selectedPair)}/${selectedModel}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!resp.ok) throw new Error((await resp.json()).error || 'Failed');
+    const fmt = resp.headers.get('X-File-Format') || 'pdb';
+    const text = await resp.text();
+
+    viewer.clear();
+    interfaceData = null;
+    structureLoaded = false;
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('iface-status').textContent = '';
+    viewer.addModel(text, fmt);
+    structureLoaded = true;
+    applyStyle();
+    viewer.zoomTo();
+    viewer.render();
+    document.getElementById('interface-section').style.display = 'block';
+    setStatus(`Loaded: ${selectedPair} · Model ${selectedModel}`, 'ok');
+  } catch (err) {
+    setStatus('Error: ' + err.message, 'error');
+  } finally {
+    showSpinner(false);
+  }
+}
+
+// ── Interface ─────────────────────────────────────────────────────────────────
+async function loadInterface() {
+  if (!selectedPair || selectedModel === null) return;
+  const cutoff = parseFloat(document.getElementById('cutoff-input').value) || 10;
+  document.getElementById('iface-status').textContent = 'Calculating…';
+
+  const data = await apiGet(
+    `/api/structure/${encodeURIComponent(selectedPair)}/${selectedModel}/interface?cutoff=${cutoff}`
+  );
+  if (!data) return;
+
+  interfaceData = data.interface;
+  applyStyle(); // redraws base + interface overlay
+
+  const lines = [`Cutoff: ${data.cutoff} Å`];
+  for (const [chain, resi] of Object.entries(interfaceData)) {
+    lines.push(`Chain ${chain}: ${resi.length} residues`);
+    if (resi.length) lines.push(`  ${resi.join(', ')}`);
+  }
+  document.getElementById('iface-status').textContent = lines.join('\n');
+}
+
+function clearInterface() {
+  interfaceData = null;
+  document.getElementById('iface-status').textContent = '';
+  applyStyle();
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+async function apiGet(url) {
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (r.status === 401) { logout(); return null; }
+  return r.json();
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status-msg' + (cls ? ' ' + cls : '');
+}
+
+function showSpinner(on) {
+  document.getElementById('spinner').classList.toggle('active', on);
+}
+
+// ── Auto-login if token in session ────────────────────────────────────────────
+if (token) showApp();
+</script>
+</body>
+</html>
