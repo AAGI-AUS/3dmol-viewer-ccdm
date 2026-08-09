@@ -37,17 +37,19 @@ Models are served in order of rank (0 = best confidence). If `ranked_N.pdb` is m
 
 ```
 Internet
-   │  port 80
+   │  port 443 (HTTPS)
    ▼
  nginx  ──► proxy_pass ──► Node.js (port 3000)
-                                │
-                         /opt/3dmol-app/
-                         ├── server.js        # Express API + JWT auth
-                         ├── package.json
-                         ├── public/
-                         │   └── index.html   # single-page app (3Dmol.js)
-                         └── deploy/          # service + nginx config templates
+   │                            │
+   │  port 80 (redirects        /opt/3dmol-app/
+   │  to HTTPS)                 ├── server.js        # Express API + JWT auth
+   │                            ├── package.json
+   ▼                            ├── public/
+Let's Encrypt                   │   └── index.html   # single-page app (3Dmol.js)
+(auto-renewed)                  └── deploy/          # service + nginx config templates
 ```
+
+The app is served over HTTPS with a certificate from [Let's Encrypt](https://letsencrypt.org). HTTP traffic is automatically redirected to HTTPS. Port 3000 is never exposed externally.
 
 ---
 
@@ -73,6 +75,18 @@ Then reload:
 ```bash
 sudo systemctl daemon-reload && sudo systemctl restart 3dmol
 ```
+
+### Enable HTTPS with Let's Encrypt
+
+Once your server has a public hostname, issue a free trusted certificate with Certbot:
+
+```bash
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d your-hostname.example.com \
+  --non-interactive --agree-tos --email your@email.com --redirect
+```
+
+Certbot automatically configures nginx for HTTPS and sets up a systemd timer for renewal. No further action is needed — certificates renew automatically before expiry.
 
 ### Manual install
 
@@ -155,6 +169,8 @@ sudo systemctl reload nginx
 
 ## Security Notes
 
-- `ADMIN_PASSWORD` and `JWT_SECRET` must be set as environment variables — never hardcoded
-- Port 3000 is not exposed externally — nginx proxies port 80 only
-- `.env` is in `.gitignore` — never commit it
+- `ADMIN_PASSWORD` and `JWT_SECRET` must be set as environment variables — never hardcoded or committed
+- The app runs behind nginx; port 3000 is never exposed externally
+- HTTPS is enforced via Let's Encrypt; HTTP redirects to HTTPS automatically
+- Certificates auto-renew via a systemd timer installed by Certbot
+- `.env` is in `.gitignore` — never commit credentials to the repository
