@@ -89,6 +89,37 @@
   .pair-item.selected { background: #1e3a5f; color: #60a5fa; font-weight: 600; }
   .pair-empty { color: #475569; font-size: 0.85rem; padding: 8px 0; }
 
+  /* Filter selects */
+  .filter-section { margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .filter-select {
+    width: 100%; padding: 9px 12px; background: #0f1117;
+    border: 1px solid #2d3748; border-radius: 8px; color: #e2e8f0;
+    font-size: 0.85rem; outline: none;
+  }
+  .filter-select:focus { border-color: #3b82f6; }
+
+  /* Metadata detail panel */
+  .meta-panel {
+    background: #0f1117; border: 1px solid #2d3748; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 18px; font-size: 0.78rem; color: #94a3b8;
+    line-height: 1.5;
+  }
+  .meta-row { margin-bottom: 6px; }
+  .meta-row:last-child { margin-bottom: 0; }
+  .meta-row b { color: #cbd5e1; }
+  .meta-title { font-size: 0.9rem; color: #fff; font-weight: 700; margin-bottom: 6px; }
+
+  /* Method selector */
+  .method-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+  .method-btn {
+    flex: 1; min-width: 80px; padding: 8px 6px; background: #0f1117;
+    border: 1px solid #2d3748; border-radius: 6px; color: #64748b;
+    font-size: 0.78rem; font-weight: 600; cursor: pointer; text-align: center; transition: all .15s;
+  }
+  .method-btn:hover:not(:disabled) { border-color: #3b82f6; color: #60a5fa; }
+  .method-btn.active { background: #1e3a5f; border-color: #3b82f6; color: #60a5fa; }
+  .method-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
   /* Model selector */
   .model-section { margin-bottom: 20px; }
   .model-grid { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -280,16 +311,32 @@
     </div>
     <div class="sidebar-body">
 
-      <div class="section-label">Search Protein Pair</div>
-      <div class="search-wrap">
-        <span class="search-icon">⌕</span>
-        <input class="search-input" id="search-input" placeholder="Type protein name…" oninput="onSearch(this.value)">
-      </div>
-      <div class="pair-list" id="pair-list">
-        <div class="pair-empty">Loading pairs…</div>
+      <div class="section-label">Filter Interactions</div>
+      <div class="filter-section">
+        <select class="filter-select" id="filter-plant" onchange="onFilterChange()">
+          <option value="">Plant species — any</option>
+        </select>
+        <select class="filter-select" id="filter-pathogen" onchange="onFilterChange()">
+          <option value="">Pathogen species — any</option>
+        </select>
+        <select class="filter-select" id="filter-effector" onchange="onFilterChange()">
+          <option value="">Effector name — any</option>
+        </select>
       </div>
 
-      <div class="section-label">AlphaFold Model</div>
+      <div class="section-label">Matching Interactions (<span id="entry-count">0</span>)</div>
+      <div class="pair-list" id="entry-list">
+        <div class="pair-empty">Loading…</div>
+      </div>
+
+      <div id="meta-panel" class="meta-panel" style="display:none"></div>
+
+      <div class="section-label">Prediction Method</div>
+      <div class="method-row" id="method-row">
+        <span style="color:#475569;font-size:.8rem">Select an interaction first</span>
+      </div>
+
+      <div class="section-label">Model</div>
       <div class="model-section">
         <div class="model-grid" id="model-grid">
           <!-- populated dynamically -->
@@ -436,11 +483,13 @@
 
 <script>
 let token = sessionStorage.getItem('token') || null;
-let selectedPair = null;
+let selectedEntry = null;   // full metadata row for the chosen interaction
+let selectedMethod = null;  // 'af3' | 'afm' | 'boltz2' | 'chai' | 'esmfold2'
 let selectedModel = null;
+let methodAvailability = {};
 let currentStyle = 'cartoon';
 let viewer = null;
-let allPairs = [];
+let allEntries = [];
 let interfaceData = null;
 let structureLoaded = false;
 let activeLabels = {};   // "chain:resi" → 3Dmol label object
@@ -532,51 +581,146 @@ async function showApp() {
     backgroundColor: '#0a0d14'
   });
 
-  await loadPairs();
+  await loadFilters();
+  await searchEntries();
 }
 
-// ── Pairs ─────────────────────────────────────────────────────────────────────
-async function loadPairs(search = '') {
-  const url = '/api/pairs' + (search ? `?search=${encodeURIComponent(search)}` : '');
-  try {
-    const r = await apiGet(url);
-    if (!r) return;
-    allPairs = r.pairs;
-    renderPairs(r.pairs);
-  } catch {}
+// ── Metadata filters (cross-filtering — each dropdown's options come from the
+//    OTHER two current selections, so any pick is guaranteed to match rows) ──
+async function loadFilters() {
+  const plantSpecies = document.getElementById('filter-plant').value;
+  const pathogenSpecies = document.getElementById('filter-pathogen').value;
+  const effectorName = document.getElementById('filter-effector').value;
+
+  const params = new URLSearchParams();
+  if (plantSpecies) params.set('plantSpecies', plantSpecies);
+  if (pathogenSpecies) params.set('pathogenSpecies', pathogenSpecies);
+  if (effectorName) params.set('effectorName', effectorName);
+
+  const data = await apiGet('/api/metadata/filters?' + params.toString());
+  if (!data) return;
+  fillSelect('filter-plant', data.plantSpecies, 'Plant species — any', plantSpecies);
+  fillSelect('filter-pathogen', data.pathogenSpecies, 'Pathogen species — any', pathogenSpecies);
+  fillSelect('filter-effector', data.effectorNames, 'Effector name — any', effectorName);
 }
 
-function renderPairs(pairs) {
-  const el = document.getElementById('pair-list');
-  if (!pairs.length) {
-    el.innerHTML = '<div class="pair-empty">No pairs found</div>';
+function fillSelect(id, values, placeholder, keepValue) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<option value="">${placeholder}</option>` +
+    values.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
+  el.value = (keepValue && values.includes(keepValue)) ? keepValue : '';
+}
+
+async function onFilterChange() {
+  await loadFilters();
+  await searchEntries();
+}
+
+// ── Matching interactions ──────────────────────────────────────────────────────
+async function searchEntries() {
+  const plantSpecies = document.getElementById('filter-plant').value;
+  const pathogenSpecies = document.getElementById('filter-pathogen').value;
+  const effectorName = document.getElementById('filter-effector').value;
+  const params = new URLSearchParams();
+  if (plantSpecies) params.set('plantSpecies', plantSpecies);
+  if (pathogenSpecies) params.set('pathogenSpecies', pathogenSpecies);
+  if (effectorName) params.set('effectorName', effectorName);
+
+  const data = await apiGet('/api/metadata/search?' + params.toString());
+  allEntries = data ? data.entries : [];
+  document.getElementById('entry-count').textContent = allEntries.length;
+  renderEntries(allEntries);
+}
+
+function renderEntries(entries) {
+  const el = document.getElementById('entry-list');
+  if (!entries.length) {
+    el.innerHTML = '<div class="pair-empty">No matching interactions</div>';
     return;
   }
-  el.innerHTML = pairs.map(p =>
-    `<div class="pair-item${p === selectedPair ? ' selected' : ''}"
-          onclick="selectPair('${p.replace(/'/g, "\\'")}')"
-          title="${p}">${p}</div>`
-  ).join('');
+  el.innerHTML = entries.map(e => {
+    const label = `${e.effectorName || '?'} ↔ ${e.plantProteinName || '?'}`;
+    const sub = `${e.pathogenSpecies || ''} → ${e.plantSpecies || ''}`;
+    const selected = selectedEntry && selectedEntry.identifier === e.identifier;
+    return `<div class="pair-item${selected ? ' selected' : ''}"
+                 onclick="selectEntry('${e.identifier.replace(/'/g, "\\'")}')"
+                 title="${escapeAttr(label + ' — ' + sub)}">
+              ${escapeHtml(label)}<br><span style="color:#475569;font-size:.75rem">${escapeHtml(sub)}</span>
+            </div>`;
+  }).join('');
 }
 
-async function selectPair(pair) {
-  selectedPair = pair;
+async function selectEntry(identifier) {
+  const entry = allEntries.find(e => e.identifier === identifier);
+  if (!entry) return;
+  selectedEntry = entry;
+  selectedMethod = null;
   selectedModel = null;
-  renderPairs(allPairs.length ? allPairs : [pair]);
+  methodAvailability = {};
+  renderEntries(allEntries);
+  renderMetaPanel(entry);
 
-  // Load models for this pair
-  const data = await apiGet(`/api/models/${encodeURIComponent(pair)}`);
-  renderModels(data ? data.models : []);
+  document.getElementById('method-row').innerHTML = '<span style="color:#475569;font-size:.8rem">Loading methods…</span>';
+  document.getElementById('model-grid').innerHTML = '';
+
+  const data = await apiGet(`/api/methods/${encodeURIComponent(identifier)}`);
+  methodAvailability = data ? data.methods : {};
+  renderMethods();
   updateLoadBtn();
 }
 
+function renderMetaPanel(e) {
+  const panel = document.getElementById('meta-panel');
+  panel.style.display = 'block';
+  const row = (label, val) => val ? `<div class="meta-row"><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
+  panel.innerHTML =
+    `<div class="meta-title">${escapeHtml(e.effectorName || e.identifier)}</div>` +
+    row('Allele', e.effectorAllele) +
+    row('Host protein', e.plantProteinName) +
+    row('Host description', e.hostProteinDescription) +
+    row('Pathogen', e.pathogenSpecies) +
+    row('Plant', e.plantSpecies) +
+    row('PDB', e.pdb) +
+    row('Evidence', e.evidenceOfInteraction) +
+    row('Experiment', e.experimentType) +
+    row('Interaction', e.effectorHostInteraction) +
+    row('Mechanism', e.mechanism) +
+    row('Citation', e.citation) +
+    row('Reference', e.references);
+}
+
+// ── Prediction method ──────────────────────────────────────────────────────────
+const METHOD_ORDER = ['af3', 'afm', 'boltz2', 'esmfold2', 'chai'];
+
+function renderMethods() {
+  const row = document.getElementById('method-row');
+  row.innerHTML = METHOD_ORDER.map(m => {
+    const info = methodAvailability[m] || { label: m, models: [] };
+    const avail = info.models && info.models.length > 0;
+    return `<button class="method-btn${m === selectedMethod ? ' active' : ''}"
+              onclick="selectMethod('${m}')" ${avail ? '' : 'disabled'}>
+              ${info.label || m}
+            </button>`;
+  }).join('');
+}
+
+function selectMethod(method) {
+  const info = methodAvailability[method];
+  if (!info || !info.models || !info.models.length) return;
+  selectedMethod = method;
+  selectedModel = null;
+  renderMethods();
+  renderModels(info.models);
+  updateLoadBtn();
+}
+
+// ── Models ────────────────────────────────────────────────────────────────────
 function renderModels(models) {
   const grid = document.getElementById('model-grid');
-  if (!models.length) {
-    grid.innerHTML = '<span style="color:#475569;font-size:.85rem">No models found</span>';
+  if (!models || !models.length) {
+    grid.innerHTML = '<span style="color:#475569;font-size:.85rem">Select a method</span>';
     return;
   }
-  // Ensure 0-4 buttons, disable ones not available
   grid.innerHTML = [0,1,2,3,4].map(n => {
     const avail = models.includes(n);
     return `<button class="model-btn${n === selectedModel ? ' active' : ''}"
@@ -595,15 +739,15 @@ function selectModel(n) {
 }
 
 function updateLoadBtn() {
-  document.getElementById('load-btn').disabled = !(selectedPair && selectedModel !== null);
+  document.getElementById('load-btn').disabled =
+    !(selectedEntry && selectedMethod && selectedModel !== null);
 }
 
-// ── Search ────────────────────────────────────────────────────────────────────
-let searchTimer;
-function onSearch(val) {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => loadPairs(val), 300);
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
+function escapeAttr(s) { return escapeHtml(s); }
 
 // ── Style ─────────────────────────────────────────────────────────────────────
 function setStyle(style) {
@@ -650,14 +794,15 @@ function applyInterfaceOverlay() {
 
 // ── Load structure ────────────────────────────────────────────────────────────
 async function loadStructure() {
-  if (!selectedPair || selectedModel === null) return;
+  if (!selectedEntry || !selectedMethod || selectedModel === null) return;
+  const id = selectedEntry.identifier;
 
   setStatus('Loading…', '');
   showSpinner(true);
 
   try {
     const resp = await fetch(
-      `/api/structure/${encodeURIComponent(selectedPair)}/${selectedModel}`,
+      `/api/structure/${selectedMethod}/${encodeURIComponent(id)}/${selectedModel}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!resp.ok) throw new Error((await resp.json()).error || 'Failed');
@@ -677,7 +822,8 @@ async function loadStructure() {
     viewer.zoomTo();
     viewer.render();
     document.getElementById('interface-section').style.display = 'block';
-    setStatus(`Loaded: ${selectedPair} · Model ${selectedModel}`, 'ok');
+    const methodLabel = (methodAvailability[selectedMethod] || {}).label || selectedMethod;
+    setStatus(`Loaded: ${selectedEntry.effectorName || id} · ${methodLabel} · Model ${selectedModel}`, 'ok');
     sequenceData = null;
     loadSequence();
   } catch (err) {
@@ -808,12 +954,12 @@ function clearLabels() {
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 async function loadInterface() {
-  if (!selectedPair || selectedModel === null) return;
+  if (!selectedEntry || !selectedMethod || selectedModel === null) return;
   const cutoff = parseFloat(document.getElementById('cutoff-input').value) || 10;
   document.getElementById('iface-status').textContent = 'Calculating…';
 
   const data = await apiGet(
-    `/api/structure/${encodeURIComponent(selectedPair)}/${selectedModel}/interface?cutoff=${cutoff}`
+    `/api/structure/${selectedMethod}/${encodeURIComponent(selectedEntry.identifier)}/${selectedModel}/interface?cutoff=${cutoff}`
   );
   if (!data) return;
 
@@ -836,9 +982,9 @@ function clearInterface() {
 
 // ── Sequence viewer ───────────────────────────────────────────────────────────
 async function loadSequence() {
-  if (!selectedPair || selectedModel === null) return;
+  if (!selectedEntry || !selectedMethod || selectedModel === null) return;
   const data = await apiGet(
-    `/api/structure/${encodeURIComponent(selectedPair)}/${selectedModel}/sequence`
+    `/api/structure/${selectedMethod}/${encodeURIComponent(selectedEntry.identifier)}/${selectedModel}/sequence`
   );
   if (!data) return;
   sequenceData = data;
