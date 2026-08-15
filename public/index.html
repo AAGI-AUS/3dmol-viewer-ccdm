@@ -632,6 +632,15 @@ async function searchEntries() {
   renderEntries(allEntries);
 }
 
+// Human-readable label for an interaction — built from metadata only, never
+// the internal identifier (that's used purely for API lookups, not display).
+function entryLabel(e) {
+  return `${e.effectorName || '?'} ↔ ${e.plantProteinName || '?'}`;
+}
+function entrySub(e) {
+  return `${e.pathogenSpecies || ''} → ${e.plantSpecies || ''}`;
+}
+
 function renderEntries(entries) {
   const el = document.getElementById('entry-list');
   if (!entries.length) {
@@ -639,8 +648,8 @@ function renderEntries(entries) {
     return;
   }
   el.innerHTML = entries.map(e => {
-    const label = `${e.effectorName || '?'} ↔ ${e.plantProteinName || '?'}`;
-    const sub = `${e.pathogenSpecies || ''} → ${e.plantSpecies || ''}`;
+    const label = entryLabel(e);
+    const sub = entrySub(e);
     const selected = selectedEntry && selectedEntry.identifier === e.identifier;
     return `<div class="pair-item${selected ? ' selected' : ''}"
                  onclick="selectEntry('${e.identifier.replace(/'/g, "\\'")}')"
@@ -674,7 +683,8 @@ function renderMetaPanel(e) {
   panel.style.display = 'block';
   const row = (label, val) => val ? `<div class="meta-row"><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
   panel.innerHTML =
-    `<div class="meta-title">${escapeHtml(e.effectorName || e.identifier)}</div>` +
+    `<div class="meta-title">${escapeHtml(entryLabel(e))}</div>` +
+    `<div class="meta-row" style="color:#64748b">${escapeHtml(entrySub(e))}</div>` +
     row('Allele', e.effectorAllele) +
     row('Host protein', e.plantProteinName) +
     row('Host description', e.hostProteinDescription) +
@@ -823,7 +833,7 @@ async function loadStructure() {
     viewer.render();
     document.getElementById('interface-section').style.display = 'block';
     const methodLabel = (methodAvailability[selectedMethod] || {}).label || selectedMethod;
-    setStatus(`Loaded: ${selectedEntry.effectorName || id} · ${methodLabel} · Model ${selectedModel}`, 'ok');
+    setStatus(`Loaded: ${entryLabel(selectedEntry)} · ${methodLabel} · Model ${selectedModel}`, 'ok');
     sequenceData = null;
     loadSequence();
   } catch (err) {
