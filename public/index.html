@@ -249,6 +249,24 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* pLDDT toggle */
+  .plddt-toggle-row { margin-bottom: 10px; }
+  .plddt-toggle-label {
+    display: flex; align-items: center; gap: 8px; font-size: 0.85rem;
+    color: #94a3b8; cursor: pointer; user-select: none;
+  }
+  .plddt-toggle-label input { cursor: pointer; }
+  .plddt-legend {
+    display: none; font-size: 0.72rem; color: #94a3b8;
+    margin-bottom: 16px; line-height: 1.9; padding-left: 2px;
+  }
+  .plddt-legend.visible { display: block; }
+  .plddt-legend-row { display: flex; align-items: center; gap: 8px; }
+  .plddt-swatch {
+    width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0;
+  }
+  .color-section.disabled { opacity: 0.35; pointer-events: none; }
+
   /* Color pickers */
   .color-section { margin-bottom: 18px; }
   .color-row {
@@ -350,8 +368,21 @@
         <button class="style-btn" onclick="setStyle('sphere')"   id="style-sphere">Surface</button>
       </div>
 
+      <div class="plddt-toggle-row">
+        <label class="plddt-toggle-label">
+          <input type="checkbox" id="plddt-toggle" onchange="onPlddtToggle()">
+          Color by pLDDT confidence
+        </label>
+      </div>
+      <div id="plddt-legend" class="plddt-legend">
+        <div class="plddt-legend-row"><span class="plddt-swatch" style="background:#0053D6"></span>Very high (&gt; 90)</div>
+        <div class="plddt-legend-row"><span class="plddt-swatch" style="background:#65CBF3"></span>Confident (70&ndash;90)</div>
+        <div class="plddt-legend-row"><span class="plddt-swatch" style="background:#FFDB13"></span>Low (50&ndash;70)</div>
+        <div class="plddt-legend-row"><span class="plddt-swatch" style="background:#FF7D45"></span>Very low (&lt; 50)</div>
+      </div>
+
       <div class="section-label">Colors</div>
-      <div class="color-section">
+      <div class="color-section" id="color-section">
         <div class="color-row">
           <span class="chain-tag">A</span>
           <div class="color-swatches">
@@ -496,6 +527,7 @@ let activeLabels = {};   // "chain:resi" → 3Dmol label object
 let spinning = false;
 let sequenceData = null;
 let sequenceVisible = false;
+let plddtMode = false;
 
 const AA3TO1 = {
   ALA:'A', ARG:'R', ASN:'N', ASP:'D', CYS:'C', GLN:'Q', GLU:'E',
@@ -775,10 +807,36 @@ function chainColor(chain, type) {
   return extra[idx] || '#ffffff';
 }
 
+// AlphaFold DB pLDDT confidence bands — per-residue score lives in the
+// B-factor field (PDB) / _atom_site.B_iso_or_equiv (mmCIF); 3Dmol.js exposes
+// both as atom.b for every method's output (AF3/AFM/Boltz-2/Chai/ESMFold2).
+function plddtColor(atom) {
+  const b = atom.b;
+  if (b > 90) return '#0053D6';
+  if (b > 70) return '#65CBF3';
+  if (b > 50) return '#FFDB13';
+  return '#FF7D45';
+}
+
+function onPlddtToggle() {
+  plddtMode = document.getElementById('plddt-toggle').checked;
+  document.getElementById('plddt-legend').classList.toggle('visible', plddtMode);
+  document.getElementById('color-section').classList.toggle('disabled', plddtMode);
+  if (structureLoaded) applyStyle();
+}
+
 function applyStyle() {
   viewer.setStyle({}, {});
   const chains = ['A','B','C','D','E'];
-  if (currentStyle === 'cartoon') {
+  if (plddtMode) {
+    if (currentStyle === 'cartoon') {
+      viewer.setStyle({}, { cartoon: { colorfunc: plddtColor } });
+    } else if (currentStyle === 'stick') {
+      viewer.setStyle({}, { stick: { colorfunc: plddtColor, radius: 0.15 } });
+    } else {
+      viewer.setStyle({}, { sphere: { colorfunc: plddtColor, scale: 0.4 } });
+    }
+  } else if (currentStyle === 'cartoon') {
     chains.forEach(c =>
       viewer.setStyle({ chain: c }, { cartoon: { color: chainColor(c, 'base') } }));
   } else if (currentStyle === 'stick') {
@@ -795,9 +853,14 @@ function applyInterfaceOverlay() {
   if (!interfaceData || !viewer) return;
   for (const [chain, resi] of Object.entries(interfaceData)) {
     if (!resi.length) continue;
-    const col = chainColor(chain, 'iface');
-    viewer.addStyle({ chain, resi }, { cartoon: { color: col } });
-    viewer.addStyle({ chain, resi }, { stick: { color: col, radius: 0.18 } });
+    if (plddtMode) {
+      // Keep pLDDT coloring — just reveal side chains at the interface, uncolored.
+      viewer.addStyle({ chain, resi }, { stick: { colorfunc: plddtColor, radius: 0.18 } });
+    } else {
+      const col = chainColor(chain, 'iface');
+      viewer.addStyle({ chain, resi }, { cartoon: { color: col } });
+      viewer.addStyle({ chain, resi }, { stick: { color: col, radius: 0.18 } });
+    }
   }
   viewer.render();
 }

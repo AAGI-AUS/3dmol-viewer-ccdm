@@ -140,6 +140,27 @@ const METHOD_LABELS = {
   esmfold2: 'ESMFold2',
 };
 
+// AF3 sanitizes special characters out of job names, and the TSV Identifier
+// column follows AF3's spelling. AFM/Boltz2/Chai/ESMFold2 were run with the
+// literal (unsanitized) name, so their output directories differ for a
+// handful of pairs. Map TSV identifier -> actual on-disk name for those four
+// tools only; AF3 always matches the TSV identifier directly.
+const ID_ALIASES = {
+  'AvrBs3_Xanthomonas_campestris_pv._vesicatoria_Caimp1_Capsicum_annuum':
+    'AvrBs3_Xanthomonas_campestris_pv._vesicatoria_Caimpα1_Capsicum_annuum',
+  'PexRD2_Phytophthora_infestans_MAPKKK_Solanum_tuberosum':
+    'PexRD2_Phytophthora_infestans_MAPKKKε_Solanum_tuberosum',
+  'Pst15882_Puccinia_striiformisf._sp.tritici_TaMYB50_Triticum_aestivum':
+    'Pst15882_Puccinia_striiformis f._sp. tritici_TaMYB50_Triticum_aestivum',
+  'SnTox1_Parastagonospora_nodorum_Snn1Snn1-B1_Triticum_aestivum':
+    'SnTox1_Parastagonospora_nodorum_Snn1(Snn1-B1)_Triticum_aestivum',
+  'VdCE11_Verticillium_dahliae_GhAP1_Gossypium_hirsutum_Arabidopsis_thaliana':
+    'VdCE11_Verticillium_dahliae_GhAP1_Gossypium_hirsutum;_Arabidopsis_thaliana',
+};
+function resolveDiskId(id) {
+  return ID_ALIASES[id] || id;
+}
+
 function resolveAf3(id) {
   const dir = path.join(METHOD_DIRS.af3, id);
   if (!fs.existsSync(dir)) return [];
@@ -152,29 +173,27 @@ function resolveAf3(id) {
 }
 
 function resolveAfm(id) {
-  const dir = path.join(METHOD_DIRS.afm, id, id);
+  const diskId = resolveDiskId(id);
+  const dir = path.join(METHOD_DIRS.afm, diskId, diskId);
   if (!fs.existsSync(dir)) return [];
-  let files;
-  try { files = fs.readdirSync(dir); } catch { return []; }
   const models = [];
   for (let n = 0; n <= 4; n++) {
-    if (files.includes(`ranked_${n}.pdb`)) {
-      models.push({ model: n, file: path.join(dir, `ranked_${n}.pdb`), format: 'pdb' });
-    } else if (files.includes(`unrelaxed_model_${n + 1}_multimer_v3_pred_0.pdb`)) {
-      models.push({ model: n, file: path.join(dir, `unrelaxed_model_${n + 1}_multimer_v3_pred_0.pdb`), format: 'pdb' });
-    }
+    const f = path.join(dir, `ranked_${n}.pdb`);
+    if (fs.existsSync(f)) models.push({ model: n, file: f, format: 'pdb' });
   }
   return models;
 }
 
 function resolveBoltz2(id) {
-  const dir = path.join(METHOD_DIRS.boltz2, `${id}.yaml`, `boltz_results_${id}`, 'predictions', id);
-  const f = path.join(dir, `${id}_model_0.cif`);
+  const diskId = resolveDiskId(id);
+  const dir = path.join(METHOD_DIRS.boltz2, `${diskId}.yaml`, `boltz_results_${diskId}`, 'predictions', diskId);
+  const f = path.join(dir, `${diskId}_model_0.cif`);
   return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 
 function resolveChai(id) {
-  const dir = path.join(METHOD_DIRS.chai, 'models', id);
+  const diskId = resolveDiskId(id);
+  const dir = path.join(METHOD_DIRS.chai, 'models', diskId);
   if (!fs.existsSync(dir)) return [];
   const models = [];
   for (let n = 0; n <= 4; n++) {
@@ -185,7 +204,8 @@ function resolveChai(id) {
 }
 
 function resolveEsmfold2(id) {
-  const f = path.join(METHOD_DIRS.esmfold2, id, `${id}_structure.cif`);
+  const diskId = resolveDiskId(id);
+  const f = path.join(METHOD_DIRS.esmfold2, diskId, `${diskId}_structure.cif`);
   return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 
