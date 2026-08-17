@@ -13,6 +13,8 @@ A web-based protein structure viewer for effector–host interaction predictions
 - **Display styles** — Cartoon, Stick, Surface
 - **JWT authentication** — login-protected; designed for easy migration to a remote user database
 
+> **Rebuilding this app elsewhere?** See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full system architecture plus a copy-paste-ready prompt for reconstructing it from scratch with Claude.
+
 ---
 
 ## Supported Prediction Methods
