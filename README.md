@@ -240,3 +240,8 @@ sudo systemctl reload nginx
 - **Interim state:** inbound access is currently restricted at the network firewall to approved source addresses, and the deployment is not yet served over HTTPS (see [Server Architecture](#server-architecture)) — do not treat this as the final security posture
 - Once a hostname is assigned, enable HTTPS via Let's Encrypt/Certbot and relax the firewall rule accordingly
 - `.env` is in `.gitignore` — never commit credentials to the repository
+
+## License 
+This project is licensed under the BSD 3-Clause License. See [LICENSE](LICENSE) for details.
+
+Copyright (c) 2026 Curtin University and GRDC
