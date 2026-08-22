@@ -1058,15 +1058,12 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function downloadText(text, filename, mime) {
-  downloadBlob(new Blob([text], { type: mime || 'text/plain' }), filename);
-}
-
 // blob: downloads can get stuck as an "Unconfirmed ####.crdownload" placeholder
 // when Chrome can't reach Safe Browsing to clear the file (seen on this
-// network) — same as the pngURI() image export, which uses a data: URI and
-// isn't affected. FASTA text is always tiny, so route it the same way instead
-// of through downloadText()/blob:.
+// network), which loses the filename entirely — same as the pngURI() image
+// export, which uses a data: URI and isn't affected. Both text exports (FASTA
+// and structure files) go the data: route so the name survives; only the video
+// export, too big for a data: URI, still uses blob:.
 function downloadTextAsDataUri(text, filename, mime) {
   const uri = `data:${mime || 'text/plain'};charset=utf-8,${encodeURIComponent(text)}`;
   triggerDownload(uri, filename);
@@ -1105,8 +1102,13 @@ function exportStructureFile() {
   closeExportMenu();
   if (!structureLoaded || !currentStructureText) return;
   const filename = exportBaseName() + '.' + currentStructureFormat;
+  // Same fallback treatment as exportFasta(): a data: URI (not blob:) so the
+  // filename survives, plus a trailing .txt because Chrome's download
+  // verification has no reputation data for .pdb/.cif and can hang on this
+  // network. The real format stays in the name (..._model0.pdb.txt), so
+  // dropping the .txt gives back a usable structure file.
   saveWithPicker(currentStructureText, filename, 'Structure file',
-    () => downloadText(currentStructureText, filename));
+    () => downloadTextAsDataUri(currentStructureText, filename + '.txt'));
 }
 
 function exportFasta() {
@@ -1124,7 +1126,7 @@ function exportFasta() {
   // waiting on a Safe Browsing check that never resolves. Content is still
   // plain FASTA text either way.
   saveWithPicker(fasta, exportBaseName() + '.fasta', 'FASTA file',
-    () => downloadTextAsDataUri(fasta, exportBaseName() + '.txt'));
+    () => downloadTextAsDataUri(fasta, exportBaseName() + '.fasta.txt'));
 }
 
 // Records the viewer spinning for a few seconds and saves it as a WebM video —
