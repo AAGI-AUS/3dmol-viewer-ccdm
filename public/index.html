@@ -1061,12 +1061,41 @@ function downloadBlob(blob, filename) {
 // blob: downloads can get stuck as an "Unconfirmed ####.crdownload" placeholder
 // when Chrome can't reach Safe Browsing to clear the file (seen on this
 // network), which loses the filename entirely — same as the pngURI() image
-// export, which uses a data: URI and isn't affected. Both text exports (FASTA
-// and structure files) go the data: route so the name survives; only the video
-// export, too big for a data: URI, still uses blob:.
+// export, which uses a data: URI and isn't affected. Every text export goes the
+// data: route so the name survives; only the video export, too big for a data:
+// URI, still uses blob:.
 function downloadTextAsDataUri(text, filename, mime) {
   const uri = `data:${mime || 'text/plain'};charset=utf-8,${encodeURIComponent(text)}`;
   triggerDownload(uri, filename);
+}
+
+// Gzipping the export solves both halves of the download problem at once: the
+// file arrives as a .pdb / .cif / .fasta inside a .gz wrapper, so the real
+// format is never renamed, and .gz is a common enough extension that Chrome's
+// download verification has reputation data for it (rare ones like .pdb can
+// hang here waiting on a Safe Browsing check that never resolves). Compression
+// also cuts a ~1.6 MB PDB to a few hundred KB, which keeps the base64 data:
+// URI comfortably small. Returns null where CompressionStream is unavailable.
+async function gzipToDataUri(text) {
+  if (!window.CompressionStream) return null;
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  const bytes  = new Uint8Array(await new Response(stream).arrayBuffer());
+  // btoa() takes a binary string; build it in chunks so a big structure
+  // doesn't blow the argument limit of String.fromCharCode.
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK)
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  return `data:application/gzip;base64,${btoa(bin)}`;
+}
+
+// Fallback download for when the File System Access picker isn't available:
+// <name>.pdb.gz / <name>.fasta.gz. If the browser has no CompressionStream,
+// sends the plain text under its own extension rather than renaming it.
+async function downloadTextGzipped(text, filename) {
+  const uri = await gzipToDataUri(text);
+  if (uri) triggerDownload(uri, filename + '.gz');
+  else downloadTextAsDataUri(text, filename);
 }
 
 function exportImage() {
@@ -1102,13 +1131,8 @@ function exportStructureFile() {
   closeExportMenu();
   if (!structureLoaded || !currentStructureText) return;
   const filename = exportBaseName() + '.' + currentStructureFormat;
-  // Same fallback treatment as exportFasta(): a data: URI (not blob:) so the
-  // filename survives, plus a trailing .txt because Chrome's download
-  // verification has no reputation data for .pdb/.cif and can hang on this
-  // network. The real format stays in the name (..._model0.pdb.txt), so
-  // dropping the .txt gives back a usable structure file.
   saveWithPicker(currentStructureText, filename, 'Structure file',
-    () => downloadTextAsDataUri(currentStructureText, filename + '.txt'));
+    () => downloadTextGzipped(currentStructureText, filename));
 }
 
 function exportFasta() {
@@ -1120,13 +1144,8 @@ function exportFasta() {
     fasta += `>${selectedEntry.identifier}_chain_${chain}\n`;
     for (let i = 0; i < seq.length; i += 60) fasta += seq.slice(i, i + 60) + '\n';
   }
-  // Fallback (no File System Access API support) uses .txt, not .fasta:
-  // Chrome's download-verification step has no reputation data for rare
-  // extensions like .fasta and can hang indefinitely on this network
-  // waiting on a Safe Browsing check that never resolves. Content is still
-  // plain FASTA text either way.
   saveWithPicker(fasta, exportBaseName() + '.fasta', 'FASTA file',
-    () => downloadTextAsDataUri(fasta, exportBaseName() + '.fasta.txt'));
+    () => downloadTextGzipped(fasta, exportBaseName() + '.fasta'));
 }
 
 // Records the viewer spinning for a few seconds and saves it as a WebM video —
