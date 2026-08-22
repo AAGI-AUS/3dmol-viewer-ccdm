@@ -1062,6 +1062,16 @@ function downloadText(text, filename, mime) {
   downloadBlob(new Blob([text], { type: mime || 'text/plain' }), filename);
 }
 
+// blob: downloads can get stuck as an "Unconfirmed ####.crdownload" placeholder
+// when Chrome can't reach Safe Browsing to clear the file (seen on this
+// network) — same as the pngURI() image export, which uses a data: URI and
+// isn't affected. FASTA text is always tiny, so route it the same way instead
+// of through downloadText()/blob:.
+function downloadTextAsDataUri(text, filename, mime) {
+  const uri = `data:${mime || 'text/plain'};charset=utf-8,${encodeURIComponent(text)}`;
+  triggerDownload(uri, filename);
+}
+
 function exportImage() {
   closeExportMenu();
   if (!structureLoaded) return;
@@ -1083,7 +1093,7 @@ function exportFasta() {
     fasta += `>${selectedEntry.identifier}_chain_${chain}\n`;
     for (let i = 0; i < seq.length; i += 60) fasta += seq.slice(i, i + 60) + '\n';
   }
-  downloadText(fasta, exportBaseName() + '.fasta');
+  downloadTextAsDataUri(fasta, exportBaseName() + '.fasta');
 }
 
 // Records the viewer spinning for a few seconds and saves it as a WebM video —
