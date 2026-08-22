@@ -88,15 +88,25 @@ try {
   console.error(`Failed to load metadata TSV (${METADATA_TSV}): ${err.message}`);
 }
 
+// Query params may arrive as a single value or (repeated key, e.g.
+// ?plantSpecies=A&plantSpecies=B) an array — normalize to an array either way.
+function toArray(v) {
+  if (v === undefined) return [];
+  return Array.isArray(v) ? v : [v];
+}
+
 // Cross-filtering: each field's option list is computed from the OTHER two
 // currently-selected filters (never from its own), so whatever the user picks
-// next is guaranteed to be part of at least one matching row.
+// next is guaranteed to be part of at least one matching row. Each filter
+// is now a set of values (multi-select), matched with OR within a field.
 app.get('/api/metadata/filters', requireAuth, (req, res) => {
-  const { plantSpecies, pathogenSpecies, effectorName } = req.query;
+  const plantSpecies = toArray(req.query.plantSpecies);
+  const pathogenSpecies = toArray(req.query.pathogenSpecies);
+  const effectorName = toArray(req.query.effectorName);
   const rowsExcluding = (excludeField) => METADATA.filter(r => {
-    if (excludeField !== 'plantSpecies' && plantSpecies && r.plantSpecies !== plantSpecies) return false;
-    if (excludeField !== 'pathogenSpecies' && pathogenSpecies && r.pathogenSpecies !== pathogenSpecies) return false;
-    if (excludeField !== 'effectorName' && effectorName && r.effectorName !== effectorName) return false;
+    if (excludeField !== 'plantSpecies' && plantSpecies.length && !plantSpecies.includes(r.plantSpecies)) return false;
+    if (excludeField !== 'pathogenSpecies' && pathogenSpecies.length && !pathogenSpecies.includes(r.pathogenSpecies)) return false;
+    if (excludeField !== 'effectorName' && effectorName.length && !effectorName.includes(r.effectorName)) return false;
     return true;
   });
   const uniq = (rows, key) => [...new Set(rows.map(r => r[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -109,11 +119,13 @@ app.get('/api/metadata/filters', requireAuth, (req, res) => {
 });
 
 app.get('/api/metadata/search', requireAuth, (req, res) => {
-  const { plantSpecies, pathogenSpecies, effectorName } = req.query;
+  const plantSpecies = toArray(req.query.plantSpecies);
+  const pathogenSpecies = toArray(req.query.pathogenSpecies);
+  const effectorName = toArray(req.query.effectorName);
   let rows = METADATA;
-  if (plantSpecies) rows = rows.filter(r => r.plantSpecies === plantSpecies);
-  if (pathogenSpecies) rows = rows.filter(r => r.pathogenSpecies === pathogenSpecies);
-  if (effectorName) rows = rows.filter(r => r.effectorName === effectorName);
+  if (plantSpecies.length) rows = rows.filter(r => plantSpecies.includes(r.plantSpecies));
+  if (pathogenSpecies.length) rows = rows.filter(r => pathogenSpecies.includes(r.pathogenSpecies));
+  if (effectorName.length) rows = rows.filter(r => effectorName.includes(r.effectorName));
   res.json({ entries: rows });
 });
 
