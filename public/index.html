@@ -97,6 +97,13 @@
     font-size: 0.85rem; outline: none;
   }
   .filter-select:focus { border-color: #3b82f6; }
+  .clear-filters-btn {
+    align-self: flex-start; background: none; border: 1px solid #2d3748;
+    border-radius: 6px; color: #64748b; font-size: 0.75rem; padding: 4px 10px;
+    cursor: pointer; transition: all .15s;
+  }
+  .clear-filters-btn:hover:not(:disabled) { color: #60a5fa; border-color: #3b82f6; }
+  .clear-filters-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
   /* Metadata detail panel */
   .meta-panel {
@@ -340,6 +347,7 @@
         <select class="filter-select" id="filter-effector" onchange="onFilterChange()">
           <option value="">Effector name — any</option>
         </select>
+        <button class="clear-filters-btn" id="clear-filters-btn" onclick="clearFilters()" disabled>Clear filters</button>
       </div>
 
       <div class="section-label">Matching Interactions (<span id="entry-count">0</span>)</div>
@@ -634,18 +642,38 @@ async function loadFilters() {
   fillSelect('filter-plant', data.plantSpecies, 'Plant species — any', plantSpecies);
   fillSelect('filter-pathogen', data.pathogenSpecies, 'Pathogen species — any', pathogenSpecies);
   fillSelect('filter-effector', data.effectorNames, 'Effector name — any', effectorName);
+  updateClearFiltersBtn();
 }
 
+// Cross-filtered option lists never include the field's own current
+// selection (see server-side comment), so if the user picked a value that
+// the fresh list doesn't repeat, keep it in as an option rather than
+// silently dropping the selection back to "any" — that was the bug in
+// https://github.com/KristinaGagalova/3dmol-viewer-ccdm/issues/4.
 function fillSelect(id, values, placeholder, keepValue) {
   const el = document.getElementById(id);
+  const options = (keepValue && !values.includes(keepValue)) ? [keepValue, ...values] : values;
   el.innerHTML = `<option value="">${placeholder}</option>` +
-    values.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
-  el.value = (keepValue && values.includes(keepValue)) ? keepValue : '';
+    options.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
+  el.value = keepValue || '';
+}
+
+function updateClearFiltersBtn() {
+  const anySelected = ['filter-plant', 'filter-pathogen', 'filter-effector']
+    .some(id => document.getElementById(id).value);
+  document.getElementById('clear-filters-btn').disabled = !anySelected;
 }
 
 async function onFilterChange() {
   await loadFilters();
   await searchEntries();
+}
+
+async function clearFilters() {
+  document.getElementById('filter-plant').value = '';
+  document.getElementById('filter-pathogen').value = '';
+  document.getElementById('filter-effector').value = '';
+  await onFilterChange();
 }
 
 // ── Matching interactions ──────────────────────────────────────────────────────
