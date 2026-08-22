@@ -1058,18 +1058,99 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function downloadText(text, filename, mime) {
-  downloadBlob(new Blob([text], { type: mime || 'text/plain' }), filename);
-}
-
 // blob: downloads can get stuck as an "Unconfirmed ####.crdownload" placeholder
 // when Chrome can't reach Safe Browsing to clear the file (seen on this
-// network) — same as the pngURI() image export, which uses a data: URI and
-// isn't affected. FASTA text is always tiny, so route it the same way instead
-// of through downloadText()/blob:.
-function downloadTextAsDataUri(text, filename, mime) {
-  const uri = `data:${mime || 'text/plain'};charset=utf-8,${encodeURIComponent(text)}`;
-  triggerDownload(uri, filename);
+// network), which loses the filename entirely — same as the pngURI() image
+// export, which uses a data: URI and isn't affected. Every text export goes the
+// data: route so the name survives; only the video export, too big for a data:
+// URI, still uses blob:.
+
+// CRC-32 of the uncompressed bytes, required by both ZIP headers. The table is
+// built once on first use.
+let crcTable = null;
+function crc32(bytes) {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      crcTable[i] = c >>> 0;
+    }
+  }
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++)
+    crc = crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// Wraps one text file in a ZIP archive, entry name and all, and returns it as a
+// data: URI. Zipping solves both halves of the download problem at once: the
+// entry inside keeps its real .pdb / .cif / .fasta name, and the download
+// itself is a .zip — an extension Chrome's download verification has plenty
+// of reputation data for, unlike the rare ones, which can hang here waiting on
+// a Safe Browsing check that never resolves. Windows opens .zip natively, so
+// there's nothing extra to install. Deflate also cuts a ~1.6 MB PDB to a few
+// hundred KB, keeping the base64 data: URI small; browsers without
+// CompressionStream fall back to a stored (uncompressed) archive, which is
+// bigger but just as valid.
+async function zipToDataUri(text, entryName) {
+  const data = new TextEncoder().encode(text);
+  let body = data, method = 0;
+  if (window.CompressionStream) {
+    try {
+      const stream = new Blob([data]).stream()
+        .pipeThrough(new CompressionStream('deflate-raw'));
+      body   = new Uint8Array(await new Response(stream).arrayBuffer());
+      method = 8;
+    } catch {
+      body = data; method = 0;  // no deflate-raw support: store instead
+    }
+  }
+
+  const name = new TextEncoder().encode(entryName);
+  const crc  = crc32(data);
+  const d    = new Date();
+  const time = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF;
+  const date = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+
+  const buf  = new ArrayBuffer(30 + name.length + body.length + 46 + name.length + 22);
+  const view = new DataView(buf);
+  const out  = new Uint8Array(buf);
+  let o = 0;
+  const u16 = v => { view.setUint16(o, v, true); o += 2; };
+  const u32 = v => { view.setUint32(o, v, true); o += 4; };
+
+  // Local file header, then the file data itself
+  u32(0x04034b50); u16(20); u16(0); u16(method); u16(time); u16(date);
+  u32(crc); u32(body.length); u32(data.length); u16(name.length); u16(0);
+  out.set(name, o); o += name.length;
+  out.set(body, o); o += body.length;
+
+  // Central directory: one entry, pointing back at offset 0
+  const cdStart = o;
+  u32(0x02014b50); u16(20); u16(20); u16(0); u16(method); u16(time); u16(date);
+  u32(crc); u32(body.length); u32(data.length);
+  u16(name.length); u16(0); u16(0); u16(0); u16(0); u32(0); u32(0);
+  out.set(name, o); o += name.length;
+
+  // End of central directory
+  const cdEnd = o;
+  u32(0x06054b50); u16(0); u16(0); u16(1); u16(1);
+  u32(cdEnd - cdStart); u32(cdStart); u16(0);
+
+  // btoa() takes a binary string; build it in chunks so a big structure
+  // doesn't blow the argument limit of String.fromCharCode.
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < out.length; i += CHUNK)
+    bin += String.fromCharCode.apply(null, out.subarray(i, i + CHUNK));
+  return `data:application/zip;base64,${btoa(bin)}`;
+}
+
+// Fallback download for when the File System Access picker isn't available:
+// <name>.pdb.zip, holding <name>.pdb.
+async function downloadTextZipped(text, filename) {
+  triggerDownload(await zipToDataUri(text, filename), filename + '.zip');
 }
 
 function exportImage() {
@@ -1106,7 +1187,7 @@ function exportStructureFile() {
   if (!structureLoaded || !currentStructureText) return;
   const filename = exportBaseName() + '.' + currentStructureFormat;
   saveWithPicker(currentStructureText, filename, 'Structure file',
-    () => downloadText(currentStructureText, filename));
+    () => downloadTextZipped(currentStructureText, filename));
 }
 
 function exportFasta() {
@@ -1118,13 +1199,8 @@ function exportFasta() {
     fasta += `>${selectedEntry.identifier}_chain_${chain}\n`;
     for (let i = 0; i < seq.length; i += 60) fasta += seq.slice(i, i + 60) + '\n';
   }
-  // Fallback (no File System Access API support) uses .txt, not .fasta:
-  // Chrome's download-verification step has no reputation data for rare
-  // extensions like .fasta and can hang indefinitely on this network
-  // waiting on a Safe Browsing check that never resolves. Content is still
-  // plain FASTA text either way.
   saveWithPicker(fasta, exportBaseName() + '.fasta', 'FASTA file',
-    () => downloadTextAsDataUri(fasta, exportBaseName() + '.txt'));
+    () => downloadTextZipped(fasta, exportBaseName() + '.fasta'));
 }
 
 // Records the viewer spinning for a few seconds and saves it as a WebM video —
