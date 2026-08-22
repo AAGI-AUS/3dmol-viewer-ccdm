@@ -1078,10 +1078,35 @@ function exportImage() {
   triggerDownload(viewer.pngURI(), exportBaseName() + '.png');
 }
 
+// Chrome's File System Access API writes straight to a user-picked file via
+// a native Save dialog, bypassing the download-manager/Safe Browsing
+// verification step entirely (it's not a "download" in that pipeline at
+// all) — so the real extension (.fasta, .pdb, .cif) survives even on
+// networks where that verification hangs. Falls back to the old
+// download-based path (via onFallback) on browsers without support, or if
+// the user's browser throws for any reason other than cancelling.
+async function saveWithPicker(text, filename, description, onFallback) {
+  if (!window.showSaveFilePicker) return onFallback();
+  try {
+    const ext = filename.slice(filename.lastIndexOf('.'));
+    const handle = await window.showSaveFilePicker({
+      suggestedName: filename,
+      types: [{ description, accept: { 'text/plain': [ext] } }],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+  } catch (err) {
+    if (err.name !== 'AbortError') onFallback();
+  }
+}
+
 function exportStructureFile() {
   closeExportMenu();
   if (!structureLoaded || !currentStructureText) return;
-  downloadText(currentStructureText, exportBaseName() + '.' + currentStructureFormat);
+  const filename = exportBaseName() + '.' + currentStructureFormat;
+  saveWithPicker(currentStructureText, filename, 'Structure file',
+    () => downloadText(currentStructureText, filename));
 }
 
 function exportFasta() {
@@ -1093,7 +1118,13 @@ function exportFasta() {
     fasta += `>${selectedEntry.identifier}_chain_${chain}\n`;
     for (let i = 0; i < seq.length; i += 60) fasta += seq.slice(i, i + 60) + '\n';
   }
-  downloadTextAsDataUri(fasta, exportBaseName() + '.fasta');
+  // Fallback (no File System Access API support) uses .txt, not .fasta:
+  // Chrome's download-verification step has no reputation data for rare
+  // extensions like .fasta and can hang indefinitely on this network
+  // waiting on a Safe Browsing check that never resolves. Content is still
+  // plain FASTA text either way.
+  saveWithPicker(fasta, exportBaseName() + '.fasta', 'FASTA file',
+    () => downloadTextAsDataUri(fasta, exportBaseName() + '.txt'));
 }
 
 // Records the viewer spinning for a few seconds and saves it as a WebM video —
