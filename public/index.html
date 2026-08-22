@@ -1045,7 +1045,11 @@ function triggerDownload(url, filename) {
   a.download = filename;
   document.body.appendChild(a);
   a.click();
-  a.remove();
+  // Removing the anchor synchronously can race with the browser reading the
+  // download attribute for blob: URLs, which drops the filename entirely
+  // (Chrome falls back to an "Unconfirmed ####.crdownload" placeholder).
+  // Deferring the removal a tick lets the download start with the name intact.
+  setTimeout(() => a.remove(), 0);
 }
 
 function downloadBlob(blob, filename) {
