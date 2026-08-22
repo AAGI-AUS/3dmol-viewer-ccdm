@@ -239,8 +239,25 @@
     transition: all .15s; backdrop-filter: blur(4px);
     user-select: none;
   }
-  .ctrl-btn:hover  { border-color: #3b82f6; color: #60a5fa; }
+  .ctrl-btn:hover:not(:disabled)  { border-color: #3b82f6; color: #60a5fa; }
   .ctrl-btn.active { border-color: #6366f1; color: #a5b4fc; background: rgba(30,27,75,.88); }
+  .ctrl-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  .export-menu-wrap { position: relative; }
+  .export-menu {
+    display: none; flex-direction: column; gap: 2px;
+    position: absolute; bottom: 0; right: 44px;
+    background: #1a1f2e; border: 1px solid #2d3748; border-radius: 8px;
+    padding: 6px; min-width: 190px; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  }
+  .export-menu.visible { display: flex; }
+  .export-menu button {
+    background: none; border: none; color: #94a3b8; text-align: left;
+    padding: 8px 10px; border-radius: 6px; font-size: .82rem; cursor: pointer;
+    transition: all .15s; white-space: nowrap;
+  }
+  .export-menu button:hover:not(:disabled) { background: #2d3748; color: #e2e8f0; }
+  .export-menu button:disabled { opacity: .35; cursor: not-allowed; }
 
   /* Atom info bar */
   .atom-info-bar {
@@ -479,6 +496,15 @@
       <button class="ctrl-btn" id="btn-spin" onclick="toggleSpin()" title="Toggle spin">↻</button>
       <button class="ctrl-btn" onclick="clearLabels()" title="Clear all labels">✕</button>
       <button class="ctrl-btn" id="btn-seq" onclick="toggleSequence()" title="Show/hide sequences">≡</button>
+      <div class="export-menu-wrap" id="export-menu-wrap">
+        <button class="ctrl-btn" id="btn-export" onclick="toggleExportMenu()" title="Export" disabled>⬇</button>
+        <div class="export-menu" id="export-menu">
+          <button onclick="exportImage()" disabled>📷 Image (PNG)</button>
+          <button onclick="exportStructureFile()" disabled>🧬 Structure file</button>
+          <button onclick="exportFasta()" disabled>📄 Sequences (FASTA)</button>
+          <button id="btn-export-video" onclick="exportVideo()" disabled>🎥 Video (WEBM)</button>
+        </div>
+      </div>
     </div>
 
     <!-- Last-clicked atom info (bottom-left) -->
@@ -546,6 +572,9 @@ let spinning = false;
 let sequenceData = null;
 let sequenceVisible = false;
 let plddtMode = false;
+let currentStructureText = null;
+let currentStructureFormat = null;
+let videoRecording = false;
 
 const AA3TO1 = {
   ALA:'A', ARG:'R', ASN:'N', ASP:'D', CYS:'C', GLN:'Q', GLU:'E',
@@ -615,6 +644,10 @@ function logout() {
   document.getElementById('app').classList.remove('visible');
   document.getElementById('login-screen').style.display = 'flex';
   if (viewer) { viewer.clear(); viewer = null; }
+  structureLoaded = false;
+  currentStructureText = null;
+  currentStructureFormat = null;
+  updateExportMenu();
 }
 
 document.getElementById('password').addEventListener('keydown', e => {
@@ -947,6 +980,8 @@ async function loadStructure() {
     document.getElementById('iface-status').textContent = '';
     viewer.addModel(text, fmt);
     structureLoaded = true;
+    currentStructureText = text;
+    currentStructureFormat = fmt;
     applyStyle();
     setupClickHandler();
     viewer.zoomTo();
@@ -956,6 +991,7 @@ async function loadStructure() {
     setStatus(`Loaded: ${entryLabel(selectedEntry)} · ${methodLabel} · Model ${selectedModel}`, 'ok');
     sequenceData = null;
     loadSequence();
+    updateExportMenu();
   } catch (err) {
     setStatus('Error: ' + err.message, 'error');
   } finally {
@@ -972,6 +1008,123 @@ function toggleSpin() {
   spinning = !spinning;
   viewer.spin(spinning ? 'y' : false);
   document.getElementById('btn-spin').classList.toggle('active', spinning);
+}
+
+// ── Export ────────────────────────────────────────────────────────────────────
+function updateExportMenu() {
+  document.getElementById('btn-export').disabled = !structureLoaded;
+  document.querySelectorAll('#export-menu button').forEach(b => { b.disabled = !structureLoaded; });
+}
+
+function toggleExportMenu() {
+  if (document.getElementById('btn-export').disabled) return;
+  document.getElementById('export-menu').classList.toggle('visible');
+}
+
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('export-menu-wrap');
+  if (wrap && !wrap.contains(e.target)) document.getElementById('export-menu').classList.remove('visible');
+});
+
+function closeExportMenu() {
+  document.getElementById('export-menu').classList.remove('visible');
+}
+
+function sanitizeFilename(s) {
+  return String(s).replace(/[^a-zA-Z0-9._-]+/g, '_');
+}
+
+function exportBaseName() {
+  const id = selectedEntry ? selectedEntry.identifier : 'structure';
+  return sanitizeFilename(`${id}_${selectedMethod}_model${selectedModel}`);
+}
+
+function triggerDownload(url, filename) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  triggerDownload(url, filename);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadText(text, filename, mime) {
+  downloadBlob(new Blob([text], { type: mime || 'text/plain' }), filename);
+}
+
+function exportImage() {
+  closeExportMenu();
+  if (!structureLoaded) return;
+  triggerDownload(viewer.pngURI(), exportBaseName() + '.png');
+}
+
+function exportStructureFile() {
+  closeExportMenu();
+  if (!structureLoaded || !currentStructureText) return;
+  downloadText(currentStructureText, exportBaseName() + '.' + currentStructureFormat);
+}
+
+function exportFasta() {
+  closeExportMenu();
+  if (!structureLoaded || !sequenceData) return;
+  let fasta = '';
+  for (const [chain, residues] of Object.entries(sequenceData)) {
+    const seq = residues.map(r => AA3TO1[r.resn] || 'X').join('');
+    fasta += `>${selectedEntry.identifier}_chain_${chain}\n`;
+    for (let i = 0; i < seq.length; i += 60) fasta += seq.slice(i, i + 60) + '\n';
+  }
+  downloadText(fasta, exportBaseName() + '.fasta');
+}
+
+// Records the viewer spinning for a few seconds and saves it as a WebM video —
+// there's no still-frame way to hand someone a "structure moving around," so
+// this captures the live canvas via MediaRecorder instead of rendering offline.
+async function exportVideo() {
+  closeExportMenu();
+  if (!structureLoaded || videoRecording) return;
+  const canvas = document.querySelector('#viewer canvas');
+  if (!canvas || !canvas.captureStream || typeof MediaRecorder === 'undefined') {
+    setStatus('Video export is not supported in this browser', 'error');
+    return;
+  }
+
+  videoRecording = true;
+  const btn = document.getElementById('btn-export-video');
+  const prevLabel = btn.textContent;
+  btn.textContent = '⏺ Recording…';
+  updateExportMenu();
+  btn.disabled = true;
+
+  const wasSpinning = spinning;
+  if (!wasSpinning) { viewer.spin('y'); }
+
+  try {
+    const stream = canvas.captureStream(30);
+    const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+      .find(t => MediaRecorder.isTypeSupported(t)) || '';
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const stopped = new Promise(resolve => recorder.onstop = resolve);
+
+    recorder.start();
+    await new Promise(r => setTimeout(r, 6000));
+    recorder.stop();
+    await stopped;
+
+    downloadBlob(new Blob(chunks, { type: 'video/webm' }), exportBaseName() + '.webm');
+  } finally {
+    if (!wasSpinning) viewer.spin(false);
+    videoRecording = false;
+    btn.textContent = prevLabel;
+    updateExportMenu();
+  }
 }
 
 // ── Click annotation ──────────────────────────────────────────────────────────
