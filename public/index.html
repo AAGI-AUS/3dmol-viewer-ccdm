@@ -97,6 +97,18 @@
     font-size: 0.85rem; outline: none;
   }
   .filter-select:focus { border-color: #3b82f6; }
+  .filter-select[multiple] {
+    height: 96px; padding: 4px;
+  }
+  .filter-select[multiple] option {
+    padding: 5px 8px; border-radius: 4px;
+  }
+  .filter-select[multiple] option:checked {
+    background: #1e3a5f; color: #60a5fa;
+  }
+  .filter-hint {
+    font-size: 0.7rem; color: #475569; margin-top: -4px;
+  }
   .clear-filters-btn {
     align-self: flex-start; background: none; border: 1px solid #2d3748;
     border-radius: 6px; color: #64748b; font-size: 0.75rem; padding: 4px 10px;
@@ -338,12 +350,10 @@
 
       <div class="section-label">Filter Interactions</div>
       <div class="filter-section">
-        <select class="filter-select" id="filter-plant" onchange="onFilterChange()">
-          <option value="">Plant species — any</option>
-        </select>
-        <select class="filter-select" id="filter-pathogen" onchange="onFilterChange()">
-          <option value="">Pathogen species — any</option>
-        </select>
+        <select class="filter-select" id="filter-plant" multiple onchange="onFilterChange()"></select>
+        <div class="filter-hint">Plant species — Ctrl/Cmd+click to select multiple, none = any</div>
+        <select class="filter-select" id="filter-pathogen" multiple onchange="onFilterChange()"></select>
+        <div class="filter-hint">Pathogen species — Ctrl/Cmd+click to select multiple, none = any</div>
         <select class="filter-select" id="filter-effector" onchange="onFilterChange()">
           <option value="">Effector name — any</option>
         </select>
@@ -625,17 +635,29 @@ async function showApp() {
   await searchEntries();
 }
 
+// Plant/Pathogen species support multi-select (<select multiple> — no
+// selection means "any"); Effector name stays single-select with an "any"
+// placeholder option.
+function getFilterValues(id) {
+  const el = document.getElementById(id);
+  return el.multiple ? [...el.selectedOptions].map(o => o.value) : (el.value ? [el.value] : []);
+}
+
+function appendAll(params, key, values) {
+  values.forEach(v => params.append(key, v));
+}
+
 // ── Metadata filters (cross-filtering — each dropdown's options come from the
 //    OTHER two current selections, so any pick is guaranteed to match rows) ──
 async function loadFilters() {
-  const plantSpecies = document.getElementById('filter-plant').value;
-  const pathogenSpecies = document.getElementById('filter-pathogen').value;
-  const effectorName = document.getElementById('filter-effector').value;
+  const plantSpecies = getFilterValues('filter-plant');
+  const pathogenSpecies = getFilterValues('filter-pathogen');
+  const effectorName = getFilterValues('filter-effector');
 
   const params = new URLSearchParams();
-  if (plantSpecies) params.set('plantSpecies', plantSpecies);
-  if (pathogenSpecies) params.set('pathogenSpecies', pathogenSpecies);
-  if (effectorName) params.set('effectorName', effectorName);
+  appendAll(params, 'plantSpecies', plantSpecies);
+  appendAll(params, 'pathogenSpecies', pathogenSpecies);
+  appendAll(params, 'effectorName', effectorName);
 
   const data = await apiGet('/api/metadata/filters?' + params.toString());
   if (!data) return;
@@ -646,21 +668,26 @@ async function loadFilters() {
 }
 
 // Cross-filtered option lists never include the field's own current
-// selection (see server-side comment), so if the user picked a value that
+// selection(s) (see server-side comment), so if the user picked a value that
 // the fresh list doesn't repeat, keep it in as an option rather than
 // silently dropping the selection back to "any" — that was the bug in
 // https://github.com/KristinaGagalova/3dmol-viewer-ccdm/issues/4.
-function fillSelect(id, values, placeholder, keepValue) {
+function fillSelect(id, values, placeholder, keepValues) {
   const el = document.getElementById(id);
-  const options = (keepValue && !values.includes(keepValue)) ? [keepValue, ...values] : values;
-  el.innerHTML = `<option value="">${placeholder}</option>` +
+  const missing = keepValues.filter(v => !values.includes(v));
+  const options = [...missing, ...values];
+  el.innerHTML = (el.multiple ? '' : `<option value="">${placeholder}</option>`) +
     options.map(v => `<option value="${escapeAttr(v)}">${escapeHtml(v)}</option>`).join('');
-  el.value = keepValue || '';
+  if (el.multiple) {
+    for (const opt of el.options) opt.selected = keepValues.includes(opt.value);
+  } else {
+    el.value = keepValues[0] || '';
+  }
 }
 
 function updateClearFiltersBtn() {
   const anySelected = ['filter-plant', 'filter-pathogen', 'filter-effector']
-    .some(id => document.getElementById(id).value);
+    .some(id => getFilterValues(id).length > 0);
   document.getElementById('clear-filters-btn').disabled = !anySelected;
 }
 
@@ -670,21 +697,23 @@ async function onFilterChange() {
 }
 
 async function clearFilters() {
-  document.getElementById('filter-plant').value = '';
-  document.getElementById('filter-pathogen').value = '';
-  document.getElementById('filter-effector').value = '';
+  for (const id of ['filter-plant', 'filter-pathogen', 'filter-effector']) {
+    const el = document.getElementById(id);
+    if (el.multiple) { for (const opt of el.options) opt.selected = false; }
+    else el.value = '';
+  }
   await onFilterChange();
 }
 
 // ── Matching interactions ──────────────────────────────────────────────────────
 async function searchEntries() {
-  const plantSpecies = document.getElementById('filter-plant').value;
-  const pathogenSpecies = document.getElementById('filter-pathogen').value;
-  const effectorName = document.getElementById('filter-effector').value;
+  const plantSpecies = getFilterValues('filter-plant');
+  const pathogenSpecies = getFilterValues('filter-pathogen');
+  const effectorName = getFilterValues('filter-effector');
   const params = new URLSearchParams();
-  if (plantSpecies) params.set('plantSpecies', plantSpecies);
-  if (pathogenSpecies) params.set('pathogenSpecies', pathogenSpecies);
-  if (effectorName) params.set('effectorName', effectorName);
+  appendAll(params, 'plantSpecies', plantSpecies);
+  appendAll(params, 'pathogenSpecies', pathogenSpecies);
+  appendAll(params, 'effectorName', effectorName);
 
   const data = await apiGet('/api/metadata/search?' + params.toString());
   allEntries = data ? data.entries : [];
