@@ -305,13 +305,51 @@
 
   /* Color pickers */
   .color-section { margin-bottom: 18px; }
-  .color-row {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-  }
+  .color-row { margin-bottom: 12px; }
   .chain-tag {
     font-size: .78rem; font-weight: 700; color: #fff;
     background: #2d3748; border-radius: 4px; padding: 2px 7px;
-    width: 44px; text-align: center; flex-shrink: 0;
+    min-width: 44px; text-align: center; flex-shrink: 0;
+  }
+  /* Chain A / B carry fixed biological roles — spell them out next to the tag */
+  .chain-head {
+    display: flex; align-items: center; gap: 7px; margin-bottom: 6px;
+    min-width: 0;
+  }
+  .chain-role {
+    font-size: .72rem; font-weight: 700; letter-spacing: .05em;
+    text-transform: uppercase; color: #cbd5e1; flex-shrink: 0;
+  }
+  .chain-protein {
+    font-size: .72rem; color: #64748b; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* Effector / target legend pinned inside the viewer */
+  .chain-legend {
+    position: absolute; top: 14px; left: 14px; z-index: 5;
+    display: none; flex-direction: column; gap: 6px;
+    background: rgba(22,27,46,.88); border: 1px solid #374151;
+    border-radius: 8px; padding: 9px 12px; backdrop-filter: blur(4px);
+    max-width: 280px; pointer-events: none;
+  }
+  .chain-legend.visible { display: flex; }
+  .chain-legend-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: .76rem; color: #cbd5e1; min-width: 0;
+  }
+  .chain-legend-swatch {
+    width: 22px; height: 16px; border-radius: 3px; flex-shrink: 0;
+    font-size: .62rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chain-legend-role {
+    font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; font-size: .68rem; flex-shrink: 0;
+  }
+  .chain-legend-name {
+    color: #94a3b8; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .color-swatches { display: flex; gap: 10px; flex: 1; }
   .color-swatch {
@@ -419,7 +457,11 @@
       <div class="section-label">Colors</div>
       <div class="color-section" id="color-section">
         <div class="color-row">
-          <span class="chain-tag">A</span>
+          <div class="chain-head">
+            <span class="chain-tag" id="chain-tag-A">A</span>
+            <span class="chain-role">Effector</span>
+            <span class="chain-protein" id="chain-protein-A"></span>
+          </div>
           <div class="color-swatches">
             <label class="color-swatch">
               <input type="color" id="color-A-base"  value="#0072B2" oninput="onColorChange()">
@@ -432,7 +474,11 @@
           </div>
         </div>
         <div class="color-row">
-          <span class="chain-tag">B</span>
+          <div class="chain-head">
+            <span class="chain-tag" id="chain-tag-B">B</span>
+            <span class="chain-role">Target</span>
+            <span class="chain-protein" id="chain-protein-B"></span>
+          </div>
           <div class="color-swatches">
             <label class="color-swatch">
               <input type="color" id="color-B-base"  value="#E69F00" oninput="onColorChange()">
@@ -474,6 +520,7 @@
   <div class="viewer-column">
   <div class="viewer-wrap">
     <div id="viewer"></div>
+    <div class="chain-legend" id="chain-legend"></div>
     <div class="viewer-placeholder" id="placeholder">
       <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="50" cy="50" r="30" stroke="currentColor" stroke-width="4"/>
@@ -516,7 +563,7 @@
   <!-- Sequence panel (below viewer) -->
   <div id="sequence-panel">
     <div class="seq-panel-header">
-      <span>Protein Sequences</span>
+      <span>Protein Sequences — Chain A: Effector · Chain B: Target</span>
       <button onclick="toggleSequence()" style="
         background:none; border:1px solid #2d3748; border-radius:5px;
         color:#64748b; font-size:.7rem; padding:2px 8px; cursor:pointer;">
@@ -607,12 +654,16 @@ function getColors() {
 }
 
 function onColorChange() {
+  updateChainRoleLabels();
+  renderChainLegend();
   if (structureLoaded) applyStyle();
 }
 
 function resetColors() {
   for (const [id, val] of Object.entries(DEFAULTS))
     document.getElementById(id).value = val;
+  updateChainRoleLabels();
+  renderChainLegend();
   if (structureLoaded) applyStyle();
 }
 
@@ -664,6 +715,7 @@ async function showApp() {
     backgroundColor: '#0a0d14'
   });
 
+  updateChainRoleLabels();
   await loadFilters();
   await searchEntries();
 }
@@ -790,6 +842,8 @@ async function selectEntry(identifier) {
   methodAvailability = {};
   renderEntries(allEntries);
   renderMetaPanel(entry);
+  updateChainRoleLabels();
+  renderChainLegend();
 
   document.getElementById('method-row').innerHTML = '<span style="color:#475569;font-size:.8rem">Loading methods…</span>';
   document.getElementById('model-grid').innerHTML = '';
@@ -807,8 +861,9 @@ function renderMetaPanel(e) {
   panel.innerHTML =
     `<div class="meta-title">${escapeHtml(entryLabel(e))}</div>` +
     `<div class="meta-row" style="color:#64748b">${escapeHtml(entrySub(e))}</div>` +
+    row('Effector (chain A)', e.effectorName) +
+    row('Target (chain B)', e.plantProteinName) +
     row('Allele', e.effectorAllele) +
-    row('Host protein', e.plantProteinName) +
     row('Host description', e.hostProteinDescription) +
     row('Pathogen', e.pathogenSpecies) +
     row('Plant', e.plantSpecies) +
@@ -889,6 +944,96 @@ function setStyle(style) {
   if (viewer && viewer.getModel()) applyStyle();
 }
 
+// Every AFM/AF3/Boltz-2/Chai/ESMFold2 model in this collection is built the
+// same way: chain A is the pathogen effector, chain B the host target protein.
+// Everything user-facing spells that out so the two halves are never confused.
+const CHAIN_ROLE = { A: 'Effector', B: 'Target' };
+
+function chainRole(chain) { return CHAIN_ROLE[chain] || ''; }
+
+// Real protein name behind a chain, from the selected interaction's metadata.
+function chainProteinName(chain) {
+  if (!selectedEntry) return '';
+  if (chain === 'A') return selectedEntry.effectorName || '';
+  if (chain === 'B') return selectedEntry.plantProteinName || '';
+  return '';
+}
+
+// "Chain A · Effector (VirE2)" — each part dropped when it isn't known.
+function chainLabel(chain, prefix) {
+  const role = chainRole(chain);
+  const name = chainProteinName(chain);
+  let out = (prefix === undefined ? 'Chain ' : prefix) + chain;
+  if (role) out += ' · ' + role;
+  if (name) out += ' (' + name + ')';
+  return out;
+}
+
+// Compact form for the crowded 3D labels: "A (Effector)".
+function chainShort(chain) {
+  const role = chainRole(chain);
+  return role ? chain + ' (' + role + ')' : chain;
+}
+
+// Readable text colour over a user-chosen swatch colour.
+function textOn(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex));
+  if (!m) return '#ffffff';
+  const v = parseInt(m[1], 16);
+  const lum = 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255);
+  return lum > 150 ? '#0f1117' : '#ffffff';
+}
+
+// Chains actually present in the loaded model; falls back to the A/B pair.
+function chainsInStructure() {
+  if (sequenceData) return Object.keys(sequenceData).sort();
+  return ['A', 'B'];
+}
+
+// Protein names in the colour sidebar, refreshed whenever the entry changes.
+function updateChainRoleLabels() {
+  for (const chain of ['A', 'B']) {
+    const nameEl = document.getElementById('chain-protein-' + chain);
+    if (nameEl) {
+      const name = chainProteinName(chain);
+      nameEl.textContent = name;
+      nameEl.title = name;
+    }
+    const tagEl = document.getElementById('chain-tag-' + chain);
+    if (tagEl) {
+      const col = chainColor(chain, 'base');
+      tagEl.style.background = col;
+      tagEl.style.color = textOn(col);
+      tagEl.title = chainLabel(chain);
+    }
+  }
+}
+
+// Legend pinned in the viewer so effector vs target is readable off the 3D view.
+function renderChainLegend() {
+  const el = document.getElementById('chain-legend');
+  if (!el) return;
+  if (!structureLoaded) {
+    el.classList.remove('visible');
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = chainsInStructure().map(chain => {
+    const role = chainRole(chain) || 'Chain ' + chain;
+    const name = chainProteinName(chain);
+    // pLDDT mode recolours by confidence, so a chain swatch would lie there.
+    const col   = plddtMode ? '#2d3748' : chainColor(chain, 'base');
+    const swatch = `<span class="chain-legend-swatch"
+                          style="background:${col};color:${textOn(col)}">${escapeHtml(chain)}</span>`;
+    return `<div class="chain-legend-row" title="${escapeAttr(chainLabel(chain))}">
+              ${swatch}
+              <span class="chain-legend-role">${escapeHtml(role)}</span>
+              <span class="chain-legend-name">${escapeHtml(name)}</span>
+            </div>`;
+  }).join('');
+  el.classList.add('visible');
+}
+
 function chainColor(chain, type) {
   const colors = getColors();
   if (colors[chain]) return colors[chain][type];
@@ -937,6 +1082,7 @@ function applyStyle() {
   }
   if (interfaceData) applyInterfaceOverlay();
   else viewer.render();
+  renderChainLegend();
 }
 
 function applyInterfaceOverlay() {
@@ -974,6 +1120,7 @@ async function loadStructure() {
 
     viewer.clear();
     interfaceData = null;
+    sequenceData = null;
     structureLoaded = false;
     clearLabels();
     document.getElementById('placeholder').style.display = 'none';
@@ -989,7 +1136,6 @@ async function loadStructure() {
     document.getElementById('interface-section').style.display = 'block';
     const methodLabel = (methodAvailability[selectedMethod] || {}).label || selectedMethod;
     setStatus(`Loaded: ${entryLabel(selectedEntry)} · ${methodLabel} · Model ${selectedModel}`, 'ok');
-    sequenceData = null;
     loadSequence();
     updateExportMenu();
   } catch (err) {
@@ -1258,7 +1404,7 @@ function setupClickHandler() {
       delete activeLabels[key];
     } else {
       const col   = chainColor(atom.chain, 'base');
-      const label = `${atom.resn} ${atom.resi} · ${atom.chain}`;
+      const label = `${atom.resn} ${atom.resi} · ${chainShort(atom.chain)}`;
       activeLabels[key] = viewer.addLabel(label, {
         position:          { x: atom.x, y: atom.y, z: atom.z },
         backgroundColor:   'black',
@@ -1285,7 +1431,7 @@ function updateAtomInfoBar(atom) {
   document.getElementById('atom-info').innerHTML =
     `<span class="aa-code" style="color:${chainColor(atom.chain,'base')}">${aa1}</span>` +
     `<b>${atom.resn}</b> · ${name}<br>` +
-    `Residue <b>${atom.resi}</b> · Chain <b>${atom.chain}</b>`;
+    `Residue <b>${atom.resi}</b> · <b>${escapeHtml(chainLabel(atom.chain))}</b>`;
   document.getElementById('atom-info-bar').style.display = 'block';
 }
 
@@ -1317,7 +1463,7 @@ function updateSelectionPanel() {
     html += `<div style="margin-bottom:10px">
       <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;
                   letter-spacing:.07em;color:${col};margin-bottom:4px">
-        Chain ${chain} · ${resis.length} residue${resis.length > 1 ? 's' : ''}
+        ${escapeHtml(chainLabel(chain))} · ${resis.length} residue${resis.length > 1 ? 's' : ''}
       </div>`;
     resis.forEach(resi => {
       html += `<div style="display:flex;align-items:center;justify-content:space-between;
@@ -1372,7 +1518,7 @@ async function loadInterface() {
 
   const lines = [`Cutoff: ${data.cutoff} Å`];
   for (const [chain, resi] of Object.entries(interfaceData)) {
-    lines.push(`Chain ${chain}: ${resi.length} residues`);
+    lines.push(`${chainLabel(chain)}: ${resi.length} residues`);
     if (resi.length) lines.push(`  ${resi.join(', ')}`);
   }
   document.getElementById('iface-status').textContent = lines.join('\n');
@@ -1393,6 +1539,7 @@ async function loadSequence() {
   if (!data) return;
   sequenceData = data;
   renderSequence();
+  renderChainLegend();
 }
 
 function toggleSequence() {
@@ -1411,7 +1558,7 @@ function renderSequence() {
     const col = chainColor(chain, 'base');
     html += `<div class="seq-chain">
       <div class="seq-chain-label" style="color:${col}">
-        Chain ${chain} · ${residues.length} residues
+        ${escapeHtml(chainLabel(chain))} · ${residues.length} residues
       </div>
       <div class="seq-track" id="seq-track-${chain}">`;
 
