@@ -527,11 +527,6 @@
   }
   .sb-tab:hover { color: #94a3b8; }
   .sb-tab.active { color: #60a5fa; border-bottom-color: #3b82f6; background: #1a1f2e; }
-  .tab-dot {
-    display: none; width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
-    position: absolute; top: 6px; right: 7px;
-  }
-  .tab-dot.on { display: block; }
   .tab-pane { display: none; }
   .tab-pane.active { display: block; }
 
@@ -633,7 +628,7 @@
     <div class="sidebar-tabs">
       <button class="sb-tab active" id="tab-browse"  onclick="setSidebarTab('browse')">Browse</button>
       <button class="sb-tab"        id="tab-model"   onclick="setSidebarTab('model')">Model</button>
-      <button class="sb-tab"        id="tab-display" onclick="setSidebarTab('display')">Display<span class="tab-dot" id="tab-dot-display"></span></button>
+      <button class="sb-tab"        id="tab-display" onclick="setSidebarTab('display')">Display</button>
       <button class="sb-tab"        id="tab-details" onclick="setSidebarTab('details')">Details</button>
     </div>
 
@@ -946,9 +941,6 @@ let activeLabels = {};   // "chain:resi" → 3Dmol label object
 let spinning = false;
 let sequenceData = null;
 let sequenceVisible = false;
-// Set once the user closes the panel by hand, so it is not forced back open on
-// the next structure they load.
-let sequenceUserClosed = false;
 let plddtMode = false;
 // What the viewer is actually showing right now — not the same thing as the
 // sidebar selection, which moves on as soon as another interaction is clicked.
@@ -1549,7 +1541,6 @@ async function loadStructure() {
     viewer.zoomTo();
     viewer.render();
     document.getElementById('interface-section').style.display = 'block';
-    document.getElementById('tab-dot-display').classList.add('on');
     const methodLabel = (methodAvailability[selectedMethod] || {}).label || selectedMethod;
     setStatus(`Loaded: ${entryLabel(selectedEntry)} · ${methodLabel} · Model ${selectedModel}`, 'ok');
     updateShowingBar();
@@ -1938,7 +1929,8 @@ async function loadInterface() {
   if (!data) { status.textContent = 'Could not compute the interface for this model.'; return; }
 
   interfaceData = data.interface;
-  applyStyle(); // redraws base + interface overlay
+  applyStyle();      // redraws base + interface overlay
+  renderSequence();  // and marks the same residues in the sequence tracks
 
   const lines = [`Cutoff: ${data.cutoff} Å`];
   for (const [chain, resi] of Object.entries(interfaceData)) {
@@ -1952,6 +1944,7 @@ function clearInterface() {
   interfaceData = null;
   document.getElementById('iface-status').textContent = '';
   applyStyle();
+  renderSequence();  // drop the interface marks from the sequence tracks too
 }
 
 // ── Sequence viewer ───────────────────────────────────────────────────────────
@@ -1969,14 +1962,13 @@ async function loadSequence() {
   renderSequence();
   renderChainLegend();
   // Shown by default — behind the toolbar icon the sequences were too easy to
-  // miss — unless the user has closed the panel themselves.
-  if (!sequenceUserClosed) setSequenceVisible(true);
+  // miss. Closing it applies to the structure in hand, not to the session, so
+  // the next structure loaded brings the panel back.
+  setSequenceVisible(true);
 }
 
 function toggleSequence() {
-  const next = !sequenceVisible;
-  setSequenceVisible(next);
-  sequenceUserClosed = !next;
+  setSequenceVisible(!sequenceVisible);
 }
 
 function setSequenceVisible(on) {
