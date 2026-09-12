@@ -408,12 +408,12 @@
   }
 
   /* ── Model quality: comparison overlay ── */
-  .score-overlay {
+  .score-overlay, .help-overlay {
     display: none; position: fixed; inset: 0; z-index: 400;
     background: rgba(5, 8, 14, .78); padding: 28px;
     align-items: center; justify-content: center;
   }
-  .score-overlay.open { display: flex; }
+  .score-overlay.open, .help-overlay.open { display: flex; }
   .score-card {
     background: #131722; border: 1px solid #2d3748; border-radius: 12px;
     width: 100%; max-width: 1180px; max-height: 100%;
@@ -570,6 +570,33 @@
   }
   .showing-bar b { color: #cbd5e1; font-weight: 600; }
   .showing-bar.stale { border-color: #a16207; color: #fbbf24; }
+  .sidebar-header-actions { display: flex; align-items: center; gap: 8px; }
+  .help-btn {
+    width: 24px; height: 24px; flex-shrink: 0; padding: 0;
+    background: none; border: 1px solid #2d3748; border-radius: 50%;
+    color: #64748b; font-size: .82rem; font-weight: 700; cursor: pointer;
+    line-height: 1; transition: color .15s, border-color .15s;
+  }
+  .help-btn:hover { color: #60a5fa; border-color: #3b82f6; }
+
+  .help-card {
+    background: #131722; border: 1px solid #2d3748; border-radius: 12px;
+    width: 100%; max-width: 560px; max-height: 100%; overflow: auto;
+    padding: 22px 24px 24px; box-shadow: 0 24px 60px rgba(0,0,0,.55);
+  }
+  .help-card h3 { font-size: 1rem; color: #fff; font-weight: 700; margin-bottom: 4px; }
+  .help-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+  .help-card p { font-size: .84rem; color: #94a3b8; line-height: 1.65; margin-bottom: 12px; }
+  .help-card ul { margin: 0 0 16px 18px; }
+  .help-card li { font-size: .84rem; color: #94a3b8; line-height: 1.65; margin-bottom: 5px; }
+  .help-card a { color: #60a5fa; }
+  .help-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .help-cta {
+    display: inline-block; background: #3b82f6; color: #fff; text-decoration: none;
+    font-size: .88rem; font-weight: 600; padding: 10px 18px; border-radius: 8px;
+  }
+  .help-cta:hover { background: #2563eb; }
+  .help-note { font-size: .74rem; color: #475569; margin-top: 14px; line-height: 1.6; }
 </style>
 </head>
 <body>
@@ -597,7 +624,10 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <h2>🧬 PPI Viewer</h2>
-      <button class="logout-btn" onclick="logout()">Logout</button>
+      <div class="sidebar-header-actions">
+        <button class="help-btn" onclick="openHelp()" title="Help &amp; feedback">?</button>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </div>
     </div>
 
     <div class="sidebar-tabs">
@@ -844,6 +874,39 @@
         Click residues in the viewer
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ── Help &amp; feedback ── -->
+<div class="help-overlay" id="help-overlay">
+  <div class="help-card">
+    <div class="help-head">
+      <div>
+        <h3>Help &amp; feedback</h3>
+        <div style="font-size:.76rem;color:#64748b">Questions, problems and ideas all go to the same place.</div>
+      </div>
+      <button class="score-close" style="margin-left:auto" onclick="closeHelp()" title="Close (Esc)">&times;</button>
+    </div>
+
+    <p>If you have a question or something to suggest, please open an issue on the
+    project repository. That keeps everything in one place and means the answer is
+    there for whoever asks next.</p>
+
+    <p>Worth raising as an issue:</p>
+    <ul>
+      <li>Questions about the structures, sequences or interface residues shown here</li>
+      <li>Questions about the curated interaction data or the prediction scores</li>
+      <li>Anything about the project itself</li>
+      <li>Feature requests, and anything that looks wrong or broken</li>
+    </ul>
+
+    <div class="help-actions">
+      <a class="help-cta" id="help-new-issue" href="https://github.com/AAGI-AUS/3dmol-viewer-ccdm/issues/new"
+         target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>
+      <a href="https://github.com/AAGI-AUS/3dmol-viewer-ccdm/issues"
+         target="_blank" rel="noopener noreferrer">Browse existing issues</a>
+    </div>
+    <div class="help-note" id="help-context"></div>
   </div>
 </div>
 
@@ -2388,6 +2451,46 @@ function updateShowingBar() {
   bar.innerHTML = `Showing <b>${escapeHtml(entryLabel(entry))}</b> · ${escapeHtml(label)} · Model ${model}` +
     (stale ? '<br>Selection has moved to another interaction — load it to update the view.' : '');
 }
+
+
+// ── Help & feedback ───────────────────────────────────────────────────────────
+const REPO_URL = 'https://github.com/AAGI-AUS/3dmol-viewer-ccdm';
+
+// A question about "this model" is only answerable if the model is named, so the
+// new-issue form is pre-filled with whatever the viewer is showing.
+function issueContext() {
+  if (!loadedStructure) return null;
+  const { entry, label, model } = loadedStructure;
+  return [
+    `- Interaction: ${entryLabel(entry)} (\`${entry.identifier}\`)`,
+    `- Species: ${entrySub(entry)}`,
+    `- Prediction: ${label}, model ${model}`,
+  ].join('\n');
+}
+
+function openHelp() {
+  const context = issueContext();
+  const body = context
+    ? `\n\n---\nOpened from the PPI viewer, showing:\n${context}\n`
+    : '';
+  document.getElementById('help-new-issue').href =
+    REPO_URL + '/issues/new' + (body ? '?body=' + encodeURIComponent(body) : '');
+  document.getElementById('help-context').textContent = context
+    ? 'The issue will be pre-filled with the structure you are viewing — ' +
+      `${entryLabel(loadedStructure.entry)}, ${loadedStructure.label}, model ${loadedStructure.model}. ` +
+      'You can delete that from the form if it is not relevant.'
+    : 'Load a structure first if your question is about a particular model — the issue is then pre-filled with which one.';
+  document.getElementById('help-overlay').classList.add('open');
+}
+
+function closeHelp() {
+  document.getElementById('help-overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+document.getElementById('help-overlay').addEventListener('click', e => {
+  if (e.target.id === 'help-overlay') closeHelp();
+});
 
 // ── Auto-login if token in session ────────────────────────────────────────────
 if (token) showApp();
