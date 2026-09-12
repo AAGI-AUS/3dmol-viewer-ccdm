@@ -80,6 +80,8 @@
 
   /* Pair list */
   .pair-list { max-height: 220px; overflow-y: auto; margin-bottom: 18px; }
+  #pane-browse.active { display: flex; flex-direction: column; height: 100%; }
+  #pane-browse .pair-list { flex: 1; max-height: none; min-height: 120px; margin-bottom: 0; }
   .pair-item {
     padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
     color: #94a3b8; transition: all .15s; white-space: nowrap; overflow: hidden;
@@ -372,6 +374,202 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
+
+  /* ── Model quality: sidebar preview ── */
+  .quality-preview {
+    background: #0f1117; border: 1px solid #2d3748; border-radius: 8px;
+    padding: 8px; margin-bottom: 8px;
+  }
+  .quality-empty { color: #475569; font-size: .78rem; padding: 4px 2px; }
+  .qp-row {
+    display: grid; grid-template-columns: 62px 1fr 38px; align-items: center;
+    gap: 8px; padding: 4px 4px; border-radius: 5px; cursor: pointer;
+  }
+  .qp-row:hover { background: #161b28; }
+  .qp-row.disabled { cursor: default; opacity: .45; }
+  .qp-row.disabled:hover { background: none; }
+  .qp-name { font-size: .72rem; color: #94a3b8; font-weight: 600; white-space: nowrap; }
+  .qp-row.active .qp-name { color: #60a5fa; }
+  .qp-track { height: 8px; background: #1a1f2e; border-radius: 4px; overflow: hidden; }
+  .qp-fill  { height: 100%; border-radius: 4px; }
+  .qp-val   { font-size: .72rem; color: #cbd5e1; text-align: right; font-variant-numeric: tabular-nums; }
+  .qp-na    { font-size: .68rem; color: #475569; text-align: right; }
+  .qp-foot  { font-size: .66rem; color: #475569; margin-top: 6px; padding: 0 2px; line-height: 1.4; }
+  .compare-btn {
+    width: 100%; padding: 9px; background: #1e293b; border: 1px solid #3b82f6;
+    border-radius: 8px; color: #93c5fd; font-size: .82rem; font-weight: 600;
+    cursor: pointer; margin-bottom: 18px; transition: background .15s;
+  }
+  .compare-btn:hover:not(:disabled) { background: #1e3a5f; }
+  .compare-btn:disabled { border-color: #2d3748; color: #475569; cursor: not-allowed; }
+  .method-btn .mb-score {
+    display: block; font-size: .66rem; font-weight: 500; margin-top: 2px;
+    font-variant-numeric: tabular-nums; opacity: .85;
+  }
+
+  /* ── Model quality: comparison overlay ── */
+  .score-overlay {
+    display: none; position: fixed; inset: 0; z-index: 400;
+    background: rgba(5, 8, 14, .78); padding: 28px;
+    align-items: center; justify-content: center;
+  }
+  .score-overlay.open { display: flex; }
+  .score-card {
+    background: #131722; border: 1px solid #2d3748; border-radius: 12px;
+    width: 100%; max-width: 1180px; max-height: 100%;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55);
+  }
+  .score-head {
+    padding: 16px 20px; border-bottom: 1px solid #2d3748;
+    display: flex; align-items: flex-start; gap: 16px;
+  }
+  .score-head h3 { font-size: 1rem; color: #fff; font-weight: 700; margin-bottom: 3px; }
+  .score-head .sub { font-size: .76rem; color: #64748b; line-height: 1.5; }
+  .score-head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  .seg { display: flex; border: 1px solid #2d3748; border-radius: 7px; overflow: hidden; }
+  .seg button {
+    background: #0f1117; border: none; color: #64748b; font-size: .76rem;
+    padding: 6px 12px; cursor: pointer; font-weight: 600;
+  }
+  .seg button.active { background: #1e3a5f; color: #93c5fd; }
+  .ghost-btn {
+    background: #0f1117; border: 1px solid #2d3748; border-radius: 7px;
+    color: #94a3b8; font-size: .76rem; padding: 6px 12px; cursor: pointer; font-weight: 600;
+  }
+  .ghost-btn:hover { border-color: #3b82f6; color: #93c5fd; }
+  .score-close {
+    background: none; border: none; color: #64748b; font-size: 1.4rem;
+    line-height: 1; cursor: pointer; padding: 0 2px;
+  }
+  .score-close:hover { color: #f87171; }
+  .score-body { padding: 18px 20px 22px; overflow: auto; }
+
+  /* Headline cards */
+  .score-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .mcard {
+    flex: 1; min-width: 168px; background: #0f1117; border: 1px solid #2d3748;
+    border-radius: 10px; padding: 12px 14px; position: relative;
+  }
+  .mcard.best { border-color: #22c55e; }
+  .mcard.empty { opacity: .45; }
+  .mcard-top { display: flex; align-items: center; gap: 10px; }
+  .mcard-name { font-size: .82rem; font-weight: 700; color: #e2e8f0; }
+  .mcard-tag {
+    position: absolute; top: -9px; right: 10px; background: #22c55e; color: #05240f;
+    font-size: .6rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 10px;
+  }
+  .ring { flex-shrink: 0; }
+  .mcard-headline { font-size: 1.1rem; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+  .mcard-headline small { font-size: .62rem; color: #64748b; font-weight: 600; display: block; text-transform: uppercase; letter-spacing: .06em; }
+  .mcard-mini { margin-top: 10px; display: flex; gap: 12px; }
+  .mcard-mini div { font-size: .7rem; color: #94a3b8; font-variant-numeric: tabular-nums; }
+  .mcard-mini b { color: #e2e8f0; font-weight: 700; }
+  .mcard-note { margin-top: 9px; font-size: .66rem; color: #64748b; }
+  .mcard-note.warn { color: #fbbf24; }
+
+  /* Matrix */
+  .matrix-wrap { overflow-x: auto; }
+  table.matrix { border-collapse: separate; border-spacing: 0; width: 100%; font-size: .76rem; }
+  table.matrix th, table.matrix td { padding: 6px 8px; text-align: center; white-space: nowrap; }
+  table.matrix thead th {
+    position: sticky; top: 0; background: #131722; z-index: 2;
+    border-bottom: 1px solid #2d3748; color: #cbd5e1; font-weight: 700; font-size: .76rem;
+  }
+  table.matrix thead th.metric-col { text-align: left; }
+  table.matrix th.metric-col, table.matrix td.metric-col { text-align: left; }
+  table.matrix th.method-head { cursor: pointer; }
+  table.matrix th.method-head:hover { color: #60a5fa; }
+  table.matrix th.method-head.sel { color: #60a5fa; }
+  table.matrix th.method-head small { display: block; font-weight: 500; font-size: .62rem; color: #64748b; }
+  td.metric-col, th.metric-col {
+    color: #cbd5e1; font-weight: 600; white-space: nowrap; width: 1%;
+    position: sticky; left: 0; background: #131722; z-index: 1;
+    padding-right: 22px;
+  }
+  td.metric-col small { display: block; font-weight: 400; font-size: .66rem; color: #64748b; }
+  tr.group-row td {
+    text-align: left; font-size: .66rem; text-transform: uppercase; letter-spacing: .08em;
+    color: #475569; font-weight: 700; padding-top: 14px; padding-bottom: 4px;
+    background: #131722;
+  }
+  td.cell { border-top: 1px solid #1e2433; }
+  .cell-box { border-radius: 5px; padding: 4px 6px; }
+  .cell-val { font-variant-numeric: tabular-nums; color: #e2e8f0; font-weight: 600; }
+  .cell-bar { height: 3px; border-radius: 2px; margin-top: 3px; background: rgba(255,255,255,.10); }
+  .cell-bar > span { display: block; height: 100%; border-radius: 2px; }
+  .cell-best .cell-val::after { content: ' ★'; color: #fbbf24; font-size: .7rem; }
+  .cell-na { color: #3d4759; }
+
+  /* Plain table view */
+  table.matrix.plain .cell-box { background: none !important; padding: 4px 6px; }
+  table.matrix.plain .cell-bar { display: none; }
+  table.matrix.plain .cell-best .cell-val { color: #4ade80; }
+
+  .score-legend {
+    margin-top: 16px; display: flex; gap: 18px; flex-wrap: wrap;
+    font-size: .68rem; color: #64748b; align-items: center;
+  }
+  .legend-scale { display: flex; align-items: center; gap: 6px; }
+  .legend-grad {
+    width: 110px; height: 8px; border-radius: 4px;
+    background: linear-gradient(90deg, hsl(0 65% 45%), hsl(45 75% 48%), hsl(130 60% 40%));
+  }
+
+  /* ── Sidebar tabs ── */
+  .sidebar-tabs { display: flex; border-bottom: 1px solid #2d3748; background: #161b28; }
+  .sb-tab {
+    flex: 1; padding: 9px 2px; background: none; border: none; cursor: pointer;
+    color: #64748b; font-size: .76rem; font-weight: 600;
+    border-bottom: 2px solid transparent; position: relative;
+    transition: color .15s, background .15s;
+  }
+  .sb-tab:hover { color: #94a3b8; }
+  .sb-tab.active { color: #60a5fa; border-bottom-color: #3b82f6; background: #1a1f2e; }
+  .tab-dot {
+    display: none; width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
+    position: absolute; top: 6px; right: 7px;
+  }
+  .tab-dot.on { display: block; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* The selected pair stays pinned above the panes, so every tab says which
+     interaction it is talking about without scrolling back to the list. */
+  .selected-bar { padding: 9px 16px; border-bottom: 1px solid #2d3748; background: #151a27; }
+  .sel-name { font-size: .82rem; font-weight: 700; color: #fff; }
+  .sel-sub  { font-size: .69rem; color: #64748b; margin-top: 2px; }
+
+  .section-toggle {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    background: none; border: none; padding: 0 0 8px; cursor: pointer;
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: .08em;
+    color: #475569; font-weight: 600;
+  }
+  .section-toggle:hover { color: #94a3b8; }
+  .section-toggle .chev { transition: transform .15s; font-size: .8rem; }
+  .section-toggle[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+  .filter-section.collapsed { display: none; }
+
+  .back-link {
+    background: none; border: none; color: #60a5fa; cursor: pointer;
+    font-size: .75rem; padding: 0 0 12px; display: block;
+  }
+  .back-link:hover { color: #93c5fd; }
+  .pane-hint { margin-top: 14px; font-size: .72rem; color: #475569; text-align: center; line-height: 1.6; }
+  .pane-hint button {
+    background: none; border: none; color: #60a5fa; cursor: pointer;
+    font-size: .72rem; padding: 0; text-decoration: underline;
+  }
+  .pane-empty { color: #475569; font-size: .8rem; line-height: 1.6; }
+  .showing-bar {
+    font-size: .74rem; color: #64748b; line-height: 1.5;
+    padding: 8px 10px; margin-bottom: 16px;
+    background: #0f1117; border: 1px solid #2d3748; border-radius: 7px;
+  }
+  .showing-bar b { color: #cbd5e1; font-weight: 600; }
+  .showing-bar.stale { border-color: #a16207; color: #fbbf24; }
 </style>
 </head>
 <body>
@@ -401,10 +599,27 @@
       <h2>🧬 PPI Viewer</h2>
       <button class="logout-btn" onclick="logout()">Logout</button>
     </div>
-    <div class="sidebar-body">
 
-      <div class="section-label">Filter Interactions</div>
-      <div class="filter-section">
+    <div class="sidebar-tabs">
+      <button class="sb-tab active" id="tab-browse"  onclick="setSidebarTab('browse')">Browse</button>
+      <button class="sb-tab"        id="tab-model"   onclick="setSidebarTab('model')">Model</button>
+      <button class="sb-tab"        id="tab-display" onclick="setSidebarTab('display')">Display<span class="tab-dot" id="tab-dot-display"></span></button>
+      <button class="sb-tab"        id="tab-details" onclick="setSidebarTab('details')">Details</button>
+    </div>
+
+    <div class="selected-bar" id="selected-bar" style="display:none">
+      <div class="sel-name" id="sel-name"></div>
+      <div class="sel-sub"  id="sel-sub"></div>
+    </div>
+
+    <div class="sidebar-body">
+      <!-- ── Tab 1: find an interaction ── -->
+      <div class="tab-pane active" id="pane-browse">
+
+      <button class="section-toggle" id="filters-toggle" onclick="toggleFilters()" aria-expanded="true">
+        <span>Filter Interactions</span><span class="chev">&#9662;</span>
+      </button>
+      <div class="filter-section" id="filter-section">
         <select class="filter-select" id="filter-plant" multiple onchange="onFilterChange()"></select>
         <div class="filter-hint">Plant species — Ctrl/Cmd+click to select multiple, none = any</div>
         <select class="filter-select" id="filter-pathogen" multiple onchange="onFilterChange()"></select>
@@ -420,7 +635,19 @@
         <div class="pair-empty">Loading…</div>
       </div>
 
-      <div id="meta-panel" class="meta-panel" style="display:none"></div>
+      </div><!-- /pane-browse -->
+
+      <!-- ── Tab 2: choose a prediction and load it ── -->
+      <div class="tab-pane" id="pane-model">
+      <button class="back-link" onclick="setSidebarTab('browse')">&lsaquo; Change interaction</button>
+
+      <div class="section-label">Model Quality</div>
+      <div class="quality-preview" id="quality-preview">
+        <div class="quality-empty">Select an interaction to compare methods</div>
+      </div>
+      <button class="compare-btn" id="compare-btn" onclick="openScorePanel()" disabled>
+        📊 Compare all prediction scores
+      </button>
 
       <div class="section-label">Prediction Method</div>
       <div class="method-row" id="method-row">
@@ -434,6 +661,17 @@
         </div>
       </div>
 
+      <button class="load-btn" id="load-btn" onclick="loadStructure()" disabled>Load Structure</button>
+      <div class="status-msg" id="status"></div>
+      <div class="pane-hint">
+        Colours, pLDDT and interface tools live in the
+        <button onclick="setSidebarTab('display')">Display</button> tab.
+      </div>
+      </div><!-- /pane-model -->
+
+      <!-- ── Tab 3: how the loaded structure is drawn ── -->
+      <div class="tab-pane" id="pane-display">
+      <div class="showing-bar" id="showing-bar">No structure loaded yet.</div>
       <div class="section-label">Display Style</div>
       <div class="style-row">
         <button class="style-btn active" onclick="setStyle('cartoon')" id="style-cartoon">Cartoon</button>
@@ -493,8 +731,6 @@
         <button class="color-reset" onclick="resetColors()">Reset to defaults</button>
       </div>
 
-      <button class="load-btn" id="load-btn" onclick="loadStructure()" disabled>Load Structure</button>
-      <div class="status-msg" id="status"></div>
 
       <!-- Interface section — shown after a structure loads -->
       <div id="interface-section" style="display:none;margin-top:18px">
@@ -512,6 +748,14 @@
           Clear Highlight
         </button>
         <div id="iface-status" style="font-size:.78rem;color:#64748b;margin-top:10px;line-height:1.7;white-space:pre-line"></div>
+      </div>
+      </div><!-- /pane-display -->
+
+      <!-- ── Tab 4: the curated annotation for the selected interaction ── -->
+      <div class="tab-pane" id="pane-details">
+        <div class="section-label">Curated Annotation</div>
+        <div id="meta-panel" class="meta-panel" style="display:none"></div>
+        <div class="pane-empty" id="meta-empty">Select an interaction to see its curated annotation.</div>
       </div>
 
     </div>
@@ -603,6 +847,27 @@
   </div>
 </div>
 
+<!-- ── Model quality comparison (issue #12) ── -->
+<div class="score-overlay" id="score-overlay">
+  <div class="score-card">
+    <div class="score-head">
+      <div>
+        <h3 id="score-title">—</h3>
+        <div class="sub" id="score-sub"></div>
+      </div>
+      <div class="score-head-actions">
+        <div class="seg">
+          <button id="score-view-heatmap" class="active" onclick="setScoreView('heatmap')">Heatmap</button>
+          <button id="score-view-table" onclick="setScoreView('table')">Table</button>
+        </div>
+        <button class="ghost-btn" id="score-copy-btn" onclick="copyScoreTsv()">Copy as TSV</button>
+        <button class="score-close" onclick="closeScorePanel()" title="Close (Esc)">&times;</button>
+      </div>
+    </div>
+    <div class="score-body" id="score-body"></div>
+  </div>
+</div>
+
 <script>
 let token = sessionStorage.getItem('token') || null;
 let selectedEntry = null;   // full metadata row for the chosen interaction
@@ -619,6 +884,9 @@ let spinning = false;
 let sequenceData = null;
 let sequenceVisible = false;
 let plddtMode = false;
+// What the viewer is actually showing right now — not the same thing as the
+// sidebar selection, which moves on as soon as another interaction is clicked.
+let loadedStructure = null;  // { entry, method, model }
 let currentStructureText = null;
 let currentStructureFormat = null;
 let videoRecording = false;
@@ -716,6 +984,7 @@ async function showApp() {
   });
 
   updateChainRoleLabels();
+  await loadScoreSchema();
   await loadFilters();
   await searchEntries();
 }
@@ -842,6 +1111,9 @@ async function selectEntry(identifier) {
   methodAvailability = {};
   renderEntries(allEntries);
   renderMetaPanel(entry);
+  updateShowingBar();
+  setSidebarTab('model');
+  renderQualityPreview();
   updateChainRoleLabels();
   renderChainLegend();
 
@@ -851,16 +1123,17 @@ async function selectEntry(identifier) {
   const data = await apiGet(`/api/methods/${encodeURIComponent(identifier)}`);
   methodAvailability = data ? data.methods : {};
   renderMethods();
+  renderQualityPreview();
   updateLoadBtn();
 }
 
 function renderMetaPanel(e) {
   const panel = document.getElementById('meta-panel');
   panel.style.display = 'block';
+  document.getElementById('meta-empty').style.display = 'none';
+  updateSelectedBar(e);
   const row = (label, val) => val ? `<div class="meta-row"><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
   panel.innerHTML =
-    `<div class="meta-title">${escapeHtml(entryLabel(e))}</div>` +
-    `<div class="meta-row" style="color:#64748b">${escapeHtml(entrySub(e))}</div>` +
     row('Effector (chain A)', e.effectorName) +
     row('Target (chain B)', e.plantProteinName) +
     row('Allele', e.effectorAllele) +
@@ -884,9 +1157,16 @@ function renderMethods() {
   row.innerHTML = METHOD_ORDER.map(m => {
     const info = methodAvailability[m] || { label: m, models: [] };
     const avail = info.models && info.models.length > 0;
+    // Headline ranking score under the name, so the quality ordering is legible
+    // without opening the comparison panel at all.
+    const s = methodScores(m) || {};
+    const head = s.composite !== undefined ? s.composite : s.ipTM;
+    const badge = head === undefined || head === null ? ''
+      : `<span class="mb-score" style="color:${heatColor(head, 1)}">${head.toFixed(2)}</span>`;
     return `<button class="method-btn${m === selectedMethod ? ' active' : ''}"
-              onclick="selectMethod('${m}')" ${avail ? '' : 'disabled'}>
-              ${info.label || m}
+              onclick="selectMethod('${m}')" ${avail ? '' : 'disabled'}
+              title="${avail ? escapeAttr(info.label || m) : 'No structure files for this method'}">
+              ${info.label || m}${badge}
             </button>`;
   }).join('');
 }
@@ -897,6 +1177,7 @@ function selectMethod(method) {
   selectedMethod = method;
   selectedModel = null;
   renderMethods();
+  renderQualityPreview();
   renderModels(info.models);
   updateLoadBtn();
 }
@@ -947,15 +1228,59 @@ function setStyle(style) {
 // Every AFM/AF3/Boltz-2/Chai/ESMFold2 model in this collection is built the
 // same way: chain A is the pathogen effector, chain B the host target protein.
 // Everything user-facing spells that out so the two halves are never confused.
-const CHAIN_ROLE = { A: 'Effector', B: 'Target' };
+// Chain letters are not dependable: AlphaFold-Multimer writes its unrelaxed
+// models (ranked_1..4) starting at B, so the same complex is A/B in model 0 and
+// B/C in models 1-4. Roles are therefore resolved from each loaded structure
+// rather than assumed from the letter, and everything downstream — colours,
+// protein names, the legend, interface residues — keys off the role.
+let chainRoles = { A: 'Effector', B: 'Target' };
 
-function chainRole(chain) { return CHAIN_ROLE[chain] || ''; }
+// Chains come in input order (effector first, then target). Where the curated
+// sequence lengths are known they get the final say, so a genuinely reversed
+// file is caught rather than silently mislabelled.
+function computeChainRoles() {
+  const chains = chainsInStructure();
+  const roles = {};
+  if (chains.length === 1) {
+    roles[chains[0]] = 'Effector';
+  } else if (chains.length >= 2) {
+    let [first, second] = chains;
+    const effLen = selectedEntry && selectedEntry.effectorSeqLen;
+    const tgtLen = selectedEntry && selectedEntry.targetSeqLen;
+    if (sequenceData && effLen && tgtLen) {
+      const a = sequenceData[first].length, b = sequenceData[second].length;
+      const asIs    = Math.abs(a - effLen) + Math.abs(b - tgtLen);
+      const swapped = Math.abs(b - effLen) + Math.abs(a - tgtLen);
+      if (swapped < asIs) [first, second] = [second, first];
+    }
+    roles[first] = 'Effector';
+    roles[second] = 'Target';
+  }
+  chainRoles = roles;
+}
+
+// Which colour/name slot a chain occupies: 'A' for the effector, 'B' for the
+// target, null for anything else in the file.
+function chainSlot(chain) {
+  const role = chainRoles[chain];
+  return role === 'Effector' ? 'A' : role === 'Target' ? 'B' : null;
+}
+
+function chainRole(chain) { return chainRoles[chain] || ''; }
 
 // Real protein name behind a chain, from the selected interaction's metadata.
+// The entry the viewer is showing, falling back to the selection before
+// anything has been loaded.
+function structureEntry() {
+  return (loadedStructure && loadedStructure.entry) || selectedEntry;
+}
+
 function chainProteinName(chain) {
-  if (!selectedEntry) return '';
-  if (chain === 'A') return selectedEntry.effectorName || '';
-  if (chain === 'B') return selectedEntry.plantProteinName || '';
+  const entry = structureEntry();
+  if (!entry) return '';
+  const slot = chainSlot(chain);
+  if (slot === 'A') return entry.effectorName || '';
+  if (slot === 'B') return entry.plantProteinName || '';
   return '';
 }
 
@@ -992,16 +1317,22 @@ function chainsInStructure() {
 
 // Protein names in the colour sidebar, refreshed whenever the entry changes.
 function updateChainRoleLabels() {
-  for (const chain of ['A', 'B']) {
-    const nameEl = document.getElementById('chain-protein-' + chain);
+  const present = chainsInStructure();
+  for (const slot of ['A', 'B']) {
+    // The row is fixed (effector on top, target below); the letter on its tag is
+    // whatever this structure actually calls that chain.
+    const chain = present.find(c => chainSlot(c) === slot)
+               || (slot === 'A' ? 'A' : 'B');
+    const nameEl = document.getElementById('chain-protein-' + slot);
     if (nameEl) {
       const name = chainProteinName(chain);
       nameEl.textContent = name;
       nameEl.title = name;
     }
-    const tagEl = document.getElementById('chain-tag-' + chain);
+    const tagEl = document.getElementById('chain-tag-' + slot);
     if (tagEl) {
       const col = chainColor(chain, 'base');
+      tagEl.textContent = chain;
       tagEl.style.background = col;
       tagEl.style.color = textOn(col);
       tagEl.title = chainLabel(chain);
@@ -1036,9 +1367,12 @@ function renderChainLegend() {
 
 function chainColor(chain, type) {
   const colors = getColors();
-  if (colors[chain]) return colors[chain][type];
+  const slot = chainSlot(chain);
+  if (slot && colors[slot]) return colors[slot][type];
+  // Anything beyond the effector/target pair gets a fallback colour, ordered by
+  // its position among the leftover chains rather than by letter.
   const extra = type === 'base' ? EXTRA_BASE : EXTRA_IFACE;
-  const idx = ['C','D','E'].indexOf(chain);
+  const idx = chainsInStructure().filter(c => !chainSlot(c)).indexOf(chain);
   return extra[idx] || '#ffffff';
 }
 
@@ -1062,7 +1396,7 @@ function onPlddtToggle() {
 
 function applyStyle() {
   viewer.setStyle({}, {});
-  const chains = ['A','B','C','D','E'];
+  const chains = [...new Set([...chainsInStructure(), 'A', 'B', 'C', 'D', 'E'])];
   if (plddtMode) {
     if (currentStyle === 'cartoon') {
       viewer.setStyle({}, { cartoon: { colorfunc: plddtColor } });
@@ -1078,7 +1412,8 @@ function applyStyle() {
     chains.forEach(c =>
       viewer.setStyle({ chain: c }, { stick: { color: chainColor(c, 'base'), radius: 0.15 } }));
   } else {
-    viewer.setStyle({}, { sphere: { colorscheme: 'chainHetatm', scale: 0.4 } });
+    chains.forEach(c =>
+      viewer.setStyle({ chain: c }, { sphere: { color: chainColor(c, 'base'), scale: 0.4 } }));
   }
   if (interfaceData) applyInterfaceOverlay();
   else viewer.render();
@@ -1089,7 +1424,13 @@ function applyInterfaceOverlay() {
   if (!interfaceData || !viewer) return;
   for (const [chain, resi] of Object.entries(interfaceData)) {
     if (!resi.length) continue;
-    if (plddtMode) {
+    if (currentStyle === 'sphere') {
+      // Sticks and cartoons sit inside the spheres and never show — scale the
+      // interface atoms up instead so they break the surface.
+      viewer.addStyle({ chain, resi }, plddtMode
+        ? { sphere: { colorfunc: plddtColor, scale: 0.62 } }
+        : { sphere: { color: chainColor(chain, 'iface'), scale: 0.62 } });
+    } else if (plddtMode) {
       // Keep pLDDT coloring — just reveal side chains at the interface, uncolored.
       viewer.addStyle({ chain, resi }, { stick: { colorfunc: plddtColor, radius: 0.18 } });
     } else {
@@ -1122,21 +1463,30 @@ async function loadStructure() {
     interfaceData = null;
     sequenceData = null;
     structureLoaded = false;
+    loadedStructure = null;
     clearLabels();
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('iface-status').textContent = '';
     viewer.addModel(text, fmt);
     structureLoaded = true;
+    loadedStructure = {
+      entry: selectedEntry, method: selectedMethod, model: selectedModel,
+      label: (methodAvailability[selectedMethod] || {}).label || selectedMethod,
+    };
     currentStructureText = text;
     currentStructureFormat = fmt;
+    await loadSequence();
+    computeChainRoles();
+    updateChainRoleLabels();
     applyStyle();
     setupClickHandler();
     viewer.zoomTo();
     viewer.render();
     document.getElementById('interface-section').style.display = 'block';
+    document.getElementById('tab-dot-display').classList.add('on');
     const methodLabel = (methodAvailability[selectedMethod] || {}).label || selectedMethod;
     setStatus(`Loaded: ${entryLabel(selectedEntry)} · ${methodLabel} · Model ${selectedModel}`, 'ok');
-    loadSequence();
+    updateShowingBar();
     updateExportMenu();
   } catch (err) {
     setStatus('Error: ' + err.message, 'error');
@@ -1181,8 +1531,9 @@ function sanitizeFilename(s) {
 }
 
 function exportBaseName() {
-  const id = selectedEntry ? selectedEntry.identifier : 'structure';
-  return sanitizeFilename(`${id}_${selectedMethod}_model${selectedModel}`);
+  if (!loadedStructure) return 'structure';
+  const { entry, method, model } = loadedStructure;
+  return sanitizeFilename(`${entry.identifier}_${method}_model${model}`);
 }
 
 function triggerDownload(url, filename) {
@@ -1342,7 +1693,7 @@ function exportFasta() {
   let fasta = '';
   for (const [chain, residues] of Object.entries(sequenceData)) {
     const seq = residues.map(r => AA3TO1[r.resn] || 'X').join('');
-    fasta += `>${selectedEntry.identifier}_chain_${chain}\n`;
+    fasta += `>${structureEntry().identifier}_chain_${chain}\n`;
     for (let i = 0; i < seq.length; i += 60) fasta += seq.slice(i, i + 60) + '\n';
   }
   saveWithPicker(fasta, exportBaseName() + '.fasta', 'FASTA file',
@@ -1504,14 +1855,21 @@ function clearLabels() {
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 async function loadInterface() {
-  if (!selectedEntry || !selectedMethod || selectedModel === null) return;
+  const status = document.getElementById('iface-status');
+  // Computed on the structure in the viewer, never on the sidebar selection —
+  // those two part company the moment another interaction is clicked.
+  if (!loadedStructure) {
+    status.textContent = 'Load a structure first — the interface is computed on the model in the viewer.';
+    return;
+  }
+  const { entry, method, model } = loadedStructure;
   const cutoff = parseFloat(document.getElementById('cutoff-input').value) || 10;
-  document.getElementById('iface-status').textContent = 'Calculating…';
+  status.textContent = 'Calculating…';
 
   const data = await apiGet(
-    `/api/structure/${selectedMethod}/${encodeURIComponent(selectedEntry.identifier)}/${selectedModel}/interface?cutoff=${cutoff}`
+    `/api/structure/${method}/${encodeURIComponent(entry.identifier)}/${model}/interface?cutoff=${cutoff}`
   );
-  if (!data) return;
+  if (!data) { status.textContent = 'Could not compute the interface for this model.'; return; }
 
   interfaceData = data.interface;
   applyStyle(); // redraws base + interface overlay
@@ -1521,7 +1879,7 @@ async function loadInterface() {
     lines.push(`${chainLabel(chain)}: ${resi.length} residues`);
     if (resi.length) lines.push(`  ${resi.join(', ')}`);
   }
-  document.getElementById('iface-status').textContent = lines.join('\n');
+  status.textContent = lines.join('\n');
 }
 
 function clearInterface() {
@@ -1532,9 +1890,10 @@ function clearInterface() {
 
 // ── Sequence viewer ───────────────────────────────────────────────────────────
 async function loadSequence() {
-  if (!selectedEntry || !selectedMethod || selectedModel === null) return;
+  if (!loadedStructure) return;
+  const { entry, method, model } = loadedStructure;
   const data = await apiGet(
-    `/api/structure/${selectedMethod}/${encodeURIComponent(selectedEntry.identifier)}/${selectedModel}/sequence`
+    `/api/structure/${method}/${encodeURIComponent(entry.identifier)}/${model}/sequence`
   );
   if (!data) return;
   sequenceData = data;
@@ -1638,6 +1997,372 @@ function setStatus(msg, cls) {
 
 function showSpinner(on) {
   document.getElementById('spinner').classList.toggle('active', on);
+}
+
+
+// ── Model quality comparison ──────────────────────────────────────────────────
+// Every metric for every method already arrives on the metadata row as
+// `entry.scores[method][metricKey]`, with NA/blank cells stripped server-side,
+// so the sidebar preview and the overlay both render without a round trip.
+let scoreSchema = null;     // { groups, metrics, methodLabels }
+let scoreView = 'heatmap';  // 'heatmap' | 'table'
+
+async function loadScoreSchema() {
+  scoreSchema = await apiGet('/api/scores/metrics');
+}
+
+function methodScores(method) {
+  return (selectedEntry && selectedEntry.scores && selectedEntry.scores[method]) || null;
+}
+
+// Methods that reported at least one number for this interaction. A method with
+// no numbers at all never gets a column — issue #12 asks for failed runs to stay
+// out of the comparison entirely.
+function scoredMethods() {
+  return METHOD_ORDER.filter(m => {
+    const s = methodScores(m);
+    return s && Object.keys(s).length > 0;
+  });
+}
+
+function hasStructure(method) {
+  const info = methodAvailability[method];
+  return !!(info && info.models && info.models.length);
+}
+
+function methodDisplayName(method) {
+  const info = methodAvailability[method];
+  if (info && info.label) return info.label;
+  return (scoreSchema && scoreSchema.methodLabels && scoreSchema.methodLabels[method]) || method;
+}
+
+// Red → amber → green for 0–1 metrics; the `better:'low'` metrics get t flipped
+// so that green always means "good" no matter which direction the number runs.
+function heatColor(t, alpha) {
+  const c = Math.max(0, Math.min(1, t));
+  const hue = 0 + 130 * c;
+  const sat = 62 + 8 * Math.abs(c - 0.5) * 2;
+  return `hsla(${hue.toFixed(0)}, ${sat.toFixed(0)}%, 45%, ${alpha})`;
+}
+function depthColor(t, alpha) {
+  const c = Math.max(0, Math.min(1, t));
+  return `hsla(200, ${(45 + 40 * c).toFixed(0)}%, ${(32 + 24 * c).toFixed(0)}%, ${alpha})`;
+}
+
+function plural(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
+
+function formatScore(metric, v) {
+  if (metric.scale === 'count') {
+    return v >= 10000 ? Math.round(v).toLocaleString()
+         : v >= 100   ? v.toFixed(0)
+         : v.toFixed(1);
+  }
+  return v.toFixed(3);
+}
+
+// ── Sidebar preview ───────────────────────────────────────────────────────────
+// Shows the headline ranking score per method before anything is clicked, so the
+// quality comparison is visible at a glance from the sidebar itself.
+function renderQualityPreview() {
+  const box = document.getElementById('quality-preview');
+  const btn = document.getElementById('compare-btn');
+  if (!selectedEntry) {
+    box.innerHTML = '<div class="quality-empty">Select an interaction to compare methods</div>';
+    btn.disabled = true;
+    return;
+  }
+  const methods = scoredMethods();
+  if (!methods.length) {
+    box.innerHTML = '<div class="quality-empty">No prediction scores in the metadata for this interaction</div>';
+    btn.disabled = true;
+    return;
+  }
+  btn.disabled = false;
+
+  const headline = m => {
+    const s = methodScores(m) || {};
+    return s.composite !== undefined ? s.composite
+         : s.ipTM !== undefined ? s.ipTM
+         : s.pTM;
+  };
+  const best = Math.max(...methods.map(m => headline(m) ?? 0));
+
+  box.innerHTML = METHOD_ORDER.map(m => {
+    const v = headline(m);
+    const usable = hasStructure(m);
+    const cls = `qp-row${usable ? '' : ' disabled'}${m === selectedMethod ? ' active' : ''}`;
+    const click = usable ? ` onclick="selectMethod('${m}')"` : '';
+    const title = usable
+      ? `${escapeAttr(methodDisplayName(m))} — click to select`
+      : `${escapeAttr(methodDisplayName(m))} — no structure files on disk`;
+    const right = v === undefined || v === null
+      ? '<div class="qp-na">NA</div>'
+      : `<div class="qp-val">${v.toFixed(3)}</div>`;
+    const fill = v === undefined || v === null
+      ? ''
+      : `<span class="qp-fill" style="display:block;width:${(v * 100).toFixed(1)}%;background:${heatColor(v, v === best ? 1 : .75)}"></span>`;
+    return `<div class="${cls}"${click} title="${title}">
+              <div class="qp-name">${escapeHtml(methodShort(m))}</div>
+              <div class="qp-track">${fill}</div>
+              ${right}
+            </div>`;
+  }).join('') +
+  '<div class="qp-foot">Ranking score 0.8·ipTM + 0.2·pTM. Greyed rows have scores but no structure files.</div>';
+}
+
+const METHOD_SHORT = { af3: 'AF3', afm: 'AF-Multi', boltz2: 'Boltz-2', chai: 'Chai-1', esmfold2: 'ESMFold2' };
+function methodShort(m) { return METHOD_SHORT[m] || m; }
+
+// ── Overlay ───────────────────────────────────────────────────────────────────
+async function openScorePanel() {
+  if (!selectedEntry) return;
+  if (!scoreSchema) await loadScoreSchema();   // retry if the startup fetch failed
+  if (!scoreSchema) return;
+  renderScorePanel();
+  document.getElementById('score-overlay').classList.add('open');
+}
+function closeScorePanel() {
+  document.getElementById('score-overlay').classList.remove('open');
+}
+function setScoreView(v) {
+  scoreView = v;
+  renderScorePanel();
+}
+
+function ringSvg(v, color) {
+  const r = 17, c = 2 * Math.PI * r;
+  const empty = v === undefined || v === null;
+  // A zero-length dash with a round cap still paints a dot, so the arc is left
+  // out entirely when there is no value rather than drawn at length 0.
+  const arc = empty ? '' :
+    `<circle cx="21" cy="21" r="${r}" fill="none" stroke="${color}" stroke-width="5"
+             stroke-linecap="round"
+             stroke-dasharray="${(Math.max(0, Math.min(1, v)) * c).toFixed(1)} ${c.toFixed(1)}"
+             transform="rotate(-90 21 21)"/>`;
+  return `<svg class="ring" width="42" height="42" viewBox="0 0 42 42">
+    <circle cx="21" cy="21" r="${r}" fill="none" stroke="#1e2433" stroke-width="5"/>
+    ${arc}
+  </svg>`;
+}
+
+function renderScoreCards(methods) {
+  const headline = m => {
+    const s = methodScores(m) || {};
+    return s.composite !== undefined ? s.composite : (s.ipTM !== undefined ? s.ipTM : s.pTM);
+  };
+  const best = methods.reduce((a, m) =>
+    (headline(m) ?? -1) > (headline(a) ?? -1) ? m : a, methods[0]);
+
+  return METHOD_ORDER.map(m => {
+    const s = methodScores(m);
+    if (!s) {
+      return `<div class="mcard empty">
+                <div class="mcard-top"><div class="mcard-name">${escapeHtml(methodDisplayName(m))}</div></div>
+                <div class="mcard-note">No scores in metadata</div>
+              </div>`;
+    }
+    const v = headline(m);
+    const shown = v === undefined || v === null ? '—' : v.toFixed(3);
+    const mini = [
+      s.pTM  !== undefined ? `<div>pTM <b>${s.pTM.toFixed(3)}</b></div>` : '',
+      s.ipTM !== undefined ? `<div>ipTM <b>${s.ipTM.toFixed(3)}</b></div>` : '',
+    ].join('');
+    const note = hasStructure(m)
+      ? `<div class="mcard-note">${plural(methodAvailability[m].models.length, 'model')} available</div>`
+      : '<div class="mcard-note warn">Scores only — no structure files</div>';
+    return `<div class="mcard${m === best ? ' best' : ''}">
+              ${m === best ? '<span class="mcard-tag">Best ranking</span>' : ''}
+              <div class="mcard-top">
+                ${ringSvg(v, heatColor(v ?? 0, 1))}
+                <div>
+                  <div class="mcard-name">${escapeHtml(methodDisplayName(m))}</div>
+                  <div class="mcard-headline">${shown}<small>0.8·ipTM + 0.2·pTM</small></div>
+                </div>
+              </div>
+              <div class="mcard-mini">${mini}</div>
+              ${note}
+            </div>`;
+  }).join('');
+}
+
+// One row per metric, one column per method that produced numbers. Rows where
+// nothing was computed anywhere are dropped rather than shown as a row of "—".
+function visibleMetrics(methods) {
+  if (!scoreSchema) return [];
+  return scoreSchema.metrics.filter(mt =>
+    methods.some(m => (methodScores(m) || {})[mt.key] !== undefined));
+}
+
+function renderMatrix(methods) {
+  const metrics = visibleMetrics(methods);
+  const head = `<thead><tr>
+      <th class="metric-col">Metric</th>
+      ${methods.map(m => `<th class="method-head${m === selectedMethod ? ' sel' : ''}"
+           onclick="pickMethodFromPanel('${m}')"
+           title="${hasStructure(m) ? 'Click to select this method' : 'No structure files for this method'}">
+           ${escapeHtml(methodShort(m))}<small>${hasStructure(m) ? plural(methodAvailability[m].models.length, 'model') : 'no structure'}</small>
+         </th>`).join('')}
+    </tr></thead>`;
+
+  let body = '';
+  for (const group of scoreSchema.groups) {
+    const rows = metrics.filter(mt => mt.group === group.key);
+    if (!rows.length) continue;
+    body += `<tr class="group-row"><td colspan="${methods.length + 1}">${escapeHtml(group.label)}</td></tr>`;
+    for (const mt of rows) {
+      const vals = methods.map(m => (methodScores(m) || {})[mt.key]);
+      const present = vals.filter(v => v !== undefined);
+      // Unit metrics share a fixed 0–1 scale so colours mean the same thing in
+      // every row; MSA depths are unbounded, so those are scaled within the row.
+      const lo = Math.min(...present), hi = Math.max(...present);
+      const bestVal = mt.better === 'low' ? lo : hi;
+
+      body += `<tr>
+        <td class="metric-col">${escapeHtml(mt.label)}${mt.sub ? `<small>${escapeHtml(mt.sub)}</small>` : ''}</td>` +
+        methods.map((m, i) => {
+          const v = vals[i];
+          if (v === undefined) return '<td class="cell"><span class="cell-na">—</span></td>';
+          let t;
+          if (mt.scale === 'count') {
+            t = hi > lo ? (v - lo) / (hi - lo) : 1;
+          } else {
+            t = Math.max(0, Math.min(1, v));
+            if (mt.better === 'low') t = 1 - t;
+          }
+          const bg  = mt.scale === 'count' ? depthColor(t, .55) : heatColor(t, .30);
+          const bar = mt.scale === 'count' ? depthColor(t, 1)   : heatColor(t, 1);
+          const isBest = present.length > 1 && v === bestVal;
+          return `<td class="cell${isBest ? ' cell-best' : ''}" title="${escapeAttr(mt.label + (mt.sub ? ' (' + mt.sub + ')' : '') + ' — ' + methodDisplayName(m) + (mt.desc ? '\n' + mt.desc : ''))}">
+                    <div class="cell-box" style="background:${bg}">
+                      <div class="cell-val">${formatScore(mt, v)}</div>
+                      <div class="cell-bar"><span style="width:${(t * 100).toFixed(1)}%;background:${bar}"></span></div>
+                    </div>
+                  </td>`;
+        }).join('') + '</tr>';
+    }
+  }
+
+  return `<div class="matrix-wrap">
+            <table class="matrix${scoreView === 'table' ? ' plain' : ''}">${head}<tbody>${body}</tbody></table>
+          </div>`;
+}
+
+function renderScorePanel() {
+  const methods = scoredMethods();
+  const title = document.getElementById('score-title');
+  const sub   = document.getElementById('score-sub');
+  const body  = document.getElementById('score-body');
+
+  title.textContent = entryLabel(selectedEntry);
+  sub.textContent = methods.length
+    ? `${methods.length} of ${METHOD_ORDER.length} methods produced scores · chain A = effector, chain B = target · NA values omitted`
+    : 'No prediction scores in the metadata for this interaction';
+
+  document.getElementById('score-view-heatmap').classList.toggle('active', scoreView === 'heatmap');
+  document.getElementById('score-view-table').classList.toggle('active', scoreView === 'table');
+
+  if (!methods.length) { body.innerHTML = '<div class="quality-empty">Nothing to compare.</div>'; return; }
+
+  body.innerHTML =
+    `<div class="score-cards">${renderScoreCards(methods)}</div>` +
+    renderMatrix(methods) +
+    `<div class="score-legend">
+       <div class="legend-scale"><span>worse</span><span class="legend-grad"></span><span>better</span></div>
+       <div>★ best value in the row</div>
+       <div>— not computed for that method</div>
+       <div>MSA depth cells are shaded relative to the other methods in the same row.</div>
+     </div>`;
+}
+
+function pickMethodFromPanel(m) {
+  if (!hasStructure(m)) return;
+  selectMethod(m);
+  renderScorePanel();
+}
+
+// Tab-separated so it drops straight into a spreadsheet next to the source TSV.
+function copyScoreTsv() {
+  const methods = scoredMethods();
+  const metrics = visibleMetrics(methods);
+  const lines = [['Metric', ...methods.map(m => methodDisplayName(m))].join('\t')];
+  for (const mt of metrics) {
+    const name = mt.label + (mt.sub ? ` (${mt.sub})` : '');
+    lines.push([name, ...methods.map(m => {
+      const v = (methodScores(m) || {})[mt.key];
+      return v === undefined ? 'NA' : v;
+    })].join('\t'));
+  }
+  const text = lines.join('\n');
+  const done = () => {
+    const b = document.getElementById('score-copy-btn');
+    b.textContent = 'Copied';
+    setTimeout(() => { b.textContent = 'Copy as TSV'; }, 1400);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => {});
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } finally { ta.remove(); }
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeScorePanel();
+});
+document.getElementById('score-overlay').addEventListener('click', e => {
+  if (e.target.id === 'score-overlay') closeScorePanel();
+});
+
+
+// ── Sidebar tabs ──────────────────────────────────────────────────────────────
+// The sidebar carries four separate jobs — finding a pair, choosing a
+// prediction, drawing it, and reading its annotation. One pane each keeps every
+// one of them a short scroll instead of a single very long one.
+const SIDEBAR_TABS = ['browse', 'model', 'display', 'details'];
+
+function setSidebarTab(name) {
+  for (const t of SIDEBAR_TABS) {
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+    document.getElementById('pane-' + t).classList.toggle('active', t === name);
+  }
+  document.querySelector('.sidebar-body').scrollTop = 0;
+}
+
+function toggleFilters() {
+  const sec = document.getElementById('filter-section');
+  const btn = document.getElementById('filters-toggle');
+  const collapsed = sec.classList.toggle('collapsed');
+  btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+}
+
+// Keeps the pinned header in sync, so the other three tabs still say which pair
+// they are about.
+function updateSelectedBar(e) {
+  const bar = document.getElementById('selected-bar');
+  if (!e) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  document.getElementById('sel-name').textContent = entryLabel(e);
+  document.getElementById('sel-sub').textContent = entrySub(e);
+}
+
+
+// Names the structure in the viewer, and warns when the sidebar selection has
+// moved on from it — otherwise the Display tab silently describes one pair
+// while the viewer shows another.
+function updateShowingBar() {
+  const bar = document.getElementById('showing-bar');
+  if (!bar) return;
+  if (!loadedStructure) {
+    bar.className = 'showing-bar';
+    bar.textContent = 'No structure loaded yet.';
+    return;
+  }
+  const { entry, model, label } = loadedStructure;
+  const stale = selectedEntry && selectedEntry.identifier !== entry.identifier;
+  bar.className = 'showing-bar' + (stale ? ' stale' : '');
+  bar.innerHTML = `Showing <b>${escapeHtml(entryLabel(entry))}</b> · ${escapeHtml(label)} · Model ${model}` +
+    (stale ? '<br>Selection has moved to another interaction — load it to update the view.' : '');
 }
 
 // ── Auto-login if token in session ────────────────────────────────────────────
