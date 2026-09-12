@@ -807,7 +807,7 @@
   <!-- Sequence panel (below viewer) -->
   <div id="sequence-panel">
     <div class="seq-panel-header">
-      <span>Protein Sequences — Chain A: Effector · Chain B: Target</span>
+      <span id="seq-panel-title">Protein Sequences</span>
       <button onclick="toggleSequence()" style="
         background:none; border:1px solid #2d3748; border-radius:5px;
         color:#64748b; font-size:.7rem; padding:2px 8px; cursor:pointer;">
@@ -883,6 +883,9 @@ let activeLabels = {};   // "chain:resi" → 3Dmol label object
 let spinning = false;
 let sequenceData = null;
 let sequenceVisible = false;
+// Set once the user closes the panel by hand, so it is not forced back open on
+// the next structure they load.
+let sequenceUserClosed = false;
 let plddtMode = false;
 // What the viewer is actually showing right now — not the same thing as the
 // sidebar selection, which moves on as soon as another interaction is clicked.
@@ -1897,20 +1900,41 @@ async function loadSequence() {
   );
   if (!data) return;
   sequenceData = data;
+  // The chains this structure actually uses are only known now, and the panel
+  // labels them by role — so resolve the roles before anything renders.
+  computeChainRoles();
   renderSequence();
   renderChainLegend();
+  // Shown by default — behind the toolbar icon the sequences were too easy to
+  // miss — unless the user has closed the panel themselves.
+  if (!sequenceUserClosed) setSequenceVisible(true);
 }
 
 function toggleSequence() {
-  sequenceVisible = !sequenceVisible;
-  document.getElementById('sequence-panel').classList.toggle('visible', sequenceVisible);
-  document.getElementById('btn-seq').classList.toggle('active', sequenceVisible);
-  if (sequenceVisible && sequenceData) renderSequence();
+  const next = !sequenceVisible;
+  setSequenceVisible(next);
+  sequenceUserClosed = !next;
+}
+
+function setSequenceVisible(on) {
+  sequenceVisible = on;
+  document.getElementById('sequence-panel').classList.toggle('visible', on);
+  document.getElementById('btn-seq').classList.toggle('active', on);
+  if (on && sequenceData) renderSequence();
+  // The panel shares the viewer's column, so opening or closing it changes the
+  // canvas height — 3Dmol only picks that up when it is told to.
+  if (viewer) viewer.resize();
 }
 
 function renderSequence() {
   const body = document.getElementById('seq-panel-body');
   if (!sequenceData) return;
+
+  const title = document.getElementById('seq-panel-title');
+  if (title) {
+    title.textContent = 'Protein Sequences — ' + chainsInStructure()
+      .map(c => `Chain ${c}: ${chainRole(c) || 'unassigned'}`).join(' · ');
+  }
 
   let html = '';
   for (const [chain, residues] of Object.entries(sequenceData).sort()) {
