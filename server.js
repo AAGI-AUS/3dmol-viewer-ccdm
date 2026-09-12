@@ -58,7 +58,127 @@ const METADATA_COLUMNS = {
   'Host protein description': 'hostProteinDescription',
   'Effector-host interaction': 'effectorHostInteraction',
   'Mechanism': 'mechanism',
+  'Effector sequence': 'effectorSeq',
+  'Plant protein/domain sequence': 'targetSeq',
 };
+
+// ── Prediction quality scores ────────────────────────────────────────────────
+// Chain A is the effector and chain B is the target (see issue #8), so the raw
+// *_A / *_B columns are re-labelled in terms of those roles for the UI. Metrics
+// are grouped so the comparison table reads top-down from "how good is the whole
+// complex" to "how good is each chain".
+const SCORE_GROUPS = [
+  { key: 'global',    label: 'Global confidence' },
+  { key: 'interface', label: 'Interface quality' },
+  { key: 'chains',    label: 'Per-chain & MSA depth' },
+];
+
+const SCORE_METRICS = [
+  { key: 'pTM',                   group: 'global',    label: 'pTM',                scale: 'unit',  better: 'high', desc: 'Predicted TM-score of the whole complex' },
+  { key: 'ipTM',                  group: 'global',    label: 'ipTM',               scale: 'unit',  better: 'high', desc: 'Interface predicted TM-score' },
+  { key: 'composite',             group: 'global',    label: '0.8·ipTM + 0.2·pTM', scale: 'unit',  better: 'high', desc: 'AlphaFold ranking score — the usual headline number' },
+  { key: 'pdockq',                group: 'interface', label: 'pDockQ',             scale: 'unit',  better: 'high', desc: 'Predicted DockQ score for the interface' },
+  { key: 'pdockq2_A',             group: 'interface', label: 'pDockQ2',            sub: 'effector (A)',      scale: 'unit',  better: 'high', desc: 'pDockQ2 computed on chain A, the effector' },
+  { key: 'pdockq2_B',             group: 'interface', label: 'pDockQ2',            sub: 'target (B)',        scale: 'unit',  better: 'high', desc: 'pDockQ2 computed on chain B, the target' },
+  { key: 'LIS_pep_rec',           group: 'interface', label: 'LIS pep→rec',        sub: 'effector → target', scale: 'unit',  better: 'high', desc: 'Local interaction score, effector onto target' },
+  { key: 'LIS_rec_pep',           group: 'interface', label: 'LIS rec→pep',        sub: 'target → effector', scale: 'unit',  better: 'high', desc: 'Local interaction score, target onto effector' },
+  { key: 'ipSAE_A_B',             group: 'interface', label: 'ipSAE A→B',          sub: 'effector → target', scale: 'unit',  better: 'high', desc: 'Interface pairwise score, effector onto target' },
+  { key: 'ipSAE_B_A',             group: 'interface', label: 'ipSAE B→A',          sub: 'target → effector', scale: 'unit',  better: 'high', desc: 'Interface pairwise score, target onto effector' },
+  { key: 'fraction_disorder',     group: 'chains',    label: 'Fraction disorder',  sub: 'lower is better', scale: 'unit',  better: 'low',  desc: 'Fraction of residues predicted disordered — lower is better' },
+  { key: 'effector_pTM',          group: 'chains',    label: 'Effector pTM',       sub: 'chain A',  scale: 'unit',  better: 'high' },
+  { key: 'effector_unpaired_msa', group: 'chains',    label: 'Effector MSA depth', sub: 'unpaired', scale: 'count', better: 'high' },
+  { key: 'effector_paired_msa',   group: 'chains',    label: 'Effector MSA depth', sub: 'paired',   scale: 'count', better: 'high' },
+  { key: 'effector_msa_nongap',   group: 'chains',    label: 'Effector MSA depth', sub: 'non-gap',  scale: 'count', better: 'high' },
+  { key: 'host_pTM',              group: 'chains',    label: 'Host pTM',           sub: 'chain B',  scale: 'unit',  better: 'high' },
+  { key: 'host_unpaired_msa',     group: 'chains',    label: 'Host MSA depth',     sub: 'unpaired', scale: 'count', better: 'high' },
+  { key: 'host_paired_msa',       group: 'chains',    label: 'Host MSA depth',     sub: 'paired',   scale: 'count', better: 'high' },
+  { key: 'host_msa_nongap',       group: 'chains',    label: 'Host MSA depth',     sub: 'non-gap',  scale: 'count', better: 'high' },
+];
+
+// Each method reports a different subset of the metrics above, under its own
+// column prefix. Anything absent here is simply not computed for that method,
+// and renders as "not available" rather than as a zero.
+const METHOD_SCORE_COLUMNS = {
+  af3: {
+    pTM: 'AF3_pTM', ipTM: 'AF3_ipTM', composite: 'AF3_0.8ipTM+0.2pTM',
+    pdockq: 'AF3_pdockq', pdockq2_A: 'AF3_pdockq2_A', pdockq2_B: 'AF3_pdockq2_B',
+    LIS_pep_rec: 'AF3_LIS_pep_rec', LIS_rec_pep: 'AF3_LIS_rec_pep',
+    ipSAE_A_B: 'AF3_ipSAE_A_B', ipSAE_B_A: 'AF3_ipSAE_B_A',
+    fraction_disorder: 'AF3_fraction_disorder',
+    effector_pTM: 'AF3_effector_pTM',
+    effector_unpaired_msa: 'AF3_effector_unpaired_msa_depth',
+    effector_paired_msa: 'AF3_effector_paired_msa_depth',
+    host_pTM: 'AF3_host_pTM',
+    host_unpaired_msa: 'AF3_host_unpaired_msa_depth',
+    host_paired_msa: 'AF3_host_paired_msa_depth',
+  },
+  afm: {
+    pTM: 'AFM_pTM', ipTM: 'AFM_ipTM', composite: 'AFM_0.8ipTM+0.2pTM',
+    pdockq: 'AFM_pdockq', pdockq2_A: 'AFM_pdockq2_A', pdockq2_B: 'AFM_pdockq2_B',
+    LIS_pep_rec: 'AFM_LIS_pep_rec', LIS_rec_pep: 'AFM_LIS_rec_pep',
+    ipSAE_A_B: 'AFM_ipSAE_A_B', ipSAE_B_A: 'AFM_ipSAE_B_A',
+    fraction_disorder: 'AFM_fraction_disorder',
+    effector_msa_nongap: 'AFM_Effector_msa_depth_nongap',
+    host_msa_nongap: 'AFM_Host_msa_depth_nongap',
+  },
+  boltz2: {
+    pTM: 'Boltz_pTM', ipTM: 'Boltz_ipTM', composite: 'Boltz_0.8ipTM+0.2pTM',
+    pdockq: 'Boltz_pdockq', pdockq2_A: 'Boltz_pdockq2_A', pdockq2_B: 'Boltz_pdockq2_B',
+    LIS_pep_rec: 'Boltz_LIS_pep_rec', LIS_rec_pep: 'Boltz_LIS_rec_pep',
+    ipSAE_A_B: 'Boltz_ipSAE_A_B', ipSAE_B_A: 'Boltz_ipSAE_B_A',
+    fraction_disorder: 'Boltz_fraction_disorder',
+    effector_pTM: 'Boltz_effector_pTM',
+    effector_msa_nongap: 'Boltz_Effector_msa_depth_nongap',
+    host_pTM: 'Boltz_host_pTM',
+    host_msa_nongap: 'Boltz_Host_msa_depth_nongap',
+  },
+  chai: {
+    pTM: 'Chai_pTM', ipTM: 'Chai_ipTM', composite: 'Chai_0.8ipTM+0.2pTM',
+    fraction_disorder: 'Chai_fraction_disorder',
+    effector_pTM: 'Chai_effector_pTM',
+    effector_msa_nongap: 'Chai_Effector_msa_depth_nongap',
+    host_pTM: 'Chai_host_pTM',
+    host_msa_nongap: 'Chai_Host_msa_depth_nongap',
+  },
+  esmfold2: {
+    pTM: 'esmfold2_pTM', ipTM: 'esmfold2_ipTM', composite: 'esmfold2_0.8ipTM+0.2pTM',
+    pdockq: 'esmfold2_pdockq', pdockq2_A: 'esmfold2_pdockq2_A', pdockq2_B: 'esmfold2_pdockq2_B',
+    LIS_pep_rec: 'esmfold2_LIS_pep_rec', LIS_rec_pep: 'esmfold2_LIS_rec_pep',
+    ipSAE_A_B: 'esmfold2_ipSAE_A_B', ipSAE_B_A: 'esmfold2_ipSAE_B_A',
+    fraction_disorder: 'esmfold2_fraction_disorder',
+  },
+};
+
+// A cell only counts as comparable if it parses as a finite number. Blanks and
+// "NA" mean the run failed or the metric was never computed, and issue #12 asks
+// for those to be dropped from the comparison rather than shown as a zero.
+function parseScore(raw) {
+  if (raw === undefined || raw === null) return null;
+  const s = String(raw).trim();
+  if (!s || /^(na|n\/a|nan|none|null|-|\.)$/i.test(s)) return null;
+  const v = Number(s);
+  return Number.isFinite(v) ? v : null;
+}
+
+function seqLength(seq) {
+  const clean = String(seq || '').replace(/\s/g, '');
+  return clean.length || null;
+}
+
+function extractScores(cols, headerIndex) {
+  const scores = {};
+  for (const [method, mapping] of Object.entries(METHOD_SCORE_COLUMNS)) {
+    const values = {};
+    for (const [metric, column] of Object.entries(mapping)) {
+      const idx = headerIndex[column];
+      if (idx === undefined) continue;
+      const v = parseScore(cols[idx]);
+      if (v !== null) values[metric] = v;
+    }
+    if (Object.keys(values).length) scores[method] = values;
+  }
+  return scores;
+}
 
 function loadMetadata() {
   const text = fs.readFileSync(METADATA_TSV, 'utf8');
@@ -66,7 +186,9 @@ function loadMetadata() {
   if (!lines.length) return [];
   const header = lines[0].split('\t');
   const colIndex = {};
+  const headerIndex = {};
   header.forEach((h, i) => {
+    headerIndex[h.trim()] = i;
     const key = METADATA_COLUMNS[h];
     if (key) colIndex[key] = i;
   });
@@ -75,6 +197,15 @@ function loadMetadata() {
     const cols = lines[i].split('\t');
     const row = {};
     for (const [key, idx] of Object.entries(colIndex)) row[key] = (cols[idx] || '').trim();
+    row.scores = extractScores(cols, headerIndex);
+    // Only the lengths are useful to the client (they identify which chain is
+    // which when a model's chain letters are not A/B), and shipping 147 full
+    // sequence pairs to the browser is pure weight — keep the counts, drop the
+    // sequences.
+    row.effectorSeqLen = seqLength(row.effectorSeq);
+    row.targetSeqLen = seqLength(row.targetSeq);
+    delete row.effectorSeq;
+    delete row.targetSeq;
     if (row.identifier) rows.push(row);
   }
   return rows;
@@ -127,6 +258,13 @@ app.get('/api/metadata/search', requireAuth, (req, res) => {
   if (pathogenSpecies.length) rows = rows.filter(r => pathogenSpecies.includes(r.pathogenSpecies));
   if (effectorName.length) rows = rows.filter(r => effectorName.includes(r.effectorName));
   res.json({ entries: rows });
+});
+
+// The per-entry numbers already ride along on the metadata rows (row.scores);
+// this endpoint just hands the frontend the labels, ordering and scale hints it
+// needs to lay the comparison out.
+app.get('/api/scores/metrics', requireAuth, (req, res) => {
+  res.json({ groups: SCORE_GROUPS, metrics: SCORE_METRICS, methodLabels: METHOD_LABELS });
 });
 
 app.get('/api/metadata/entry/:id', requireAuth, (req, res) => {
