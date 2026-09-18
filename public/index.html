@@ -210,7 +210,19 @@
   .seq-chain-label {
     font-size: .7rem; font-weight: 700; letter-spacing: .06em;
     text-transform: uppercase; margin-bottom: 5px;
+    display: flex; align-items: center; gap: 8px;
   }
+  /* Sits on the chain's own heading so the copy always belongs to the
+     sequence printed underneath it — one button per chain is what makes the
+     effector and the target separately copyable. */
+  .seq-copy-btn {
+    background: none; border: 1px solid #2d3748; border-radius: 5px;
+    color: #64748b; font-size: .62rem; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; padding: 2px 7px; cursor: pointer;
+    flex-shrink: 0; transition: border-color .12s, color .12s;
+  }
+  .seq-copy-btn:hover { border-color: #475569; color: #cbd5e1; }
+  .seq-copy-btn.copied { border-color: #22c55e; color: #22c55e; }
   .seq-track { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0; line-height: 1; }
   .seq-res {
     display: inline-flex; align-items: center; justify-content: center;
@@ -1275,6 +1287,28 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) { return escapeHtml(s); }
 
+// navigator.clipboard is unavailable on plain-HTTP origins, which is exactly
+// how the viewer is reached by IP — so the hidden-textarea route is a real
+// fallback here, not legacy-browser courtesy.
+function copyText(text, done) {
+  const ok = typeof done === 'function' ? done : () => {};
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(ok).catch(() => copyTextFallback(text, ok));
+  } else {
+    copyTextFallback(text, ok);
+  }
+}
+
+function copyTextFallback(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } finally { ta.remove(); }
+}
+
 // ── Style ─────────────────────────────────────────────────────────────────────
 function setStyle(style) {
   currentStyle = style;
@@ -1744,17 +1778,50 @@ function exportStructureFile() {
     () => downloadTextZipped(currentStructureText, filename));
 }
 
+// One chain as a FASTA record. The first header token stays the same ID the
+// file export writes, so a copied sequence and an exported one are traceable to
+// each other; the role and protein name ride along as the description, which is
+// what tells an effector record from a target one once it has been pasted
+// somewhere with no viewer around it.
+function chainFasta(chain) {
+  const residues = (sequenceData || {})[chain];
+  if (!residues) return '';
+  const entry = structureEntry();
+  const seq   = residues.map(r => AA3TO1[r.resn] || 'X').join('');
+  const desc  = [chainRole(chain), chainProteinName(chain)].filter(Boolean).join(' | ');
+  let out = `>${entry ? entry.identifier : 'structure'}_chain_${chain}`
+          + (desc ? ` ${desc}` : '') + '\n';
+  for (let i = 0; i < seq.length; i += 60) out += seq.slice(i, i + 60) + '\n';
+  return out;
+}
+
 function exportFasta() {
   closeExportMenu();
   if (!structureLoaded || !sequenceData) return;
-  let fasta = '';
-  for (const [chain, residues] of Object.entries(sequenceData)) {
-    const seq = residues.map(r => AA3TO1[r.resn] || 'X').join('');
-    fasta += `>${structureEntry().identifier}_chain_${chain}\n`;
-    for (let i = 0; i < seq.length; i += 60) fasta += seq.slice(i, i + 60) + '\n';
-  }
+  const fasta = Object.keys(sequenceData).sort().map(chainFasta).join('');
   saveWithPicker(fasta, exportBaseName() + '.fasta', 'FASTA file',
     () => downloadTextZipped(fasta, exportBaseName() + '.fasta'));
+}
+
+// Header + sequence for a single chain, straight to the clipboard, so the
+// effector and the target can be pasted into BLAST or a notebook one at a time.
+function copyChainFasta(chain, btnId) {
+  const fasta = chainFasta(chain);
+  if (!fasta) return;
+  copyText(fasta, () => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const prev = btn.textContent;
+    btn.textContent = 'Copied';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      // renderSequence() may have replaced the button in the meantime.
+      const live = document.getElementById(btnId);
+      if (!live) return;
+      live.textContent = prev;
+      live.classList.remove('copied');
+    }, 1400);
+  });
 }
 
 // Records the viewer spinning for a few seconds and saves it as a WebM video —
@@ -1994,9 +2061,14 @@ function renderSequence() {
   let html = '';
   for (const [chain, residues] of Object.entries(sequenceData).sort()) {
     const col = chainColor(chain, 'base');
+    const copyId   = `seq-copy-${chain}`;
+    const copyWhat = chainRole(chain) || `chain ${chain}`;
     html += `<div class="seq-chain">
       <div class="seq-chain-label" style="color:${col}">
-        ${escapeHtml(chainLabel(chain))} · ${residues.length} residues
+        <span>${escapeHtml(chainLabel(chain))} · ${residues.length} residues</span>
+        <button class="seq-copy-btn" id="${copyId}"
+                title="Copy the ${escapeAttr(copyWhat)} FASTA (header + sequence) to the clipboard"
+                onclick="copyChainFasta('${chain}','${copyId}')">Copy FASTA</button>
       </div>
       <div class="seq-track" id="seq-track-${chain}">`;
 
@@ -2371,19 +2443,11 @@ function copyScoreTsv() {
       return v === undefined ? 'NA' : v;
     })].join('\t'));
   }
-  const text = lines.join('\n');
-  const done = () => {
+  copyText(lines.join('\n'), () => {
     const b = document.getElementById('score-copy-btn');
     b.textContent = 'Copied';
     setTimeout(() => { b.textContent = 'Copy as TSV'; }, 1400);
-  };
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(done).catch(() => {});
-  } else {
-    const ta = document.createElement('textarea');
-    ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); done(); } finally { ta.remove(); }
-  }
+  });
 }
 
 document.addEventListener('keydown', e => {
