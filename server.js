@@ -311,27 +311,19 @@ function resolveDiskId(id) {
   return ID_ALIASES[id] || id;
 }
 
+// Only model 0 is exposed (issue #21): it is the best-ranked prediction for
+// every method that produces several, and the viewer no longer lets the user
+// pick between them. AF3/AFM/Chai each wrote five samples to disk; the rest
+// are left on disk but never served.
 function resolveAf3(id) {
-  const dir = path.join(METHOD_DIRS.af3, id);
-  if (!fs.existsSync(dir)) return [];
-  const models = [];
-  for (let n = 0; n <= 4; n++) {
-    const f = path.join(dir, `seed-1_sample-${n}`, `${id}_seed-1_sample-${n}_model.cif`);
-    if (fs.existsSync(f)) models.push({ model: n, file: f, format: 'cif' });
-  }
-  return models;
+  const f = path.join(METHOD_DIRS.af3, id, 'seed-1_sample-0', `${id}_seed-1_sample-0_model.cif`);
+  return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 
 function resolveAfm(id) {
   const diskId = resolveDiskId(id);
-  const dir = path.join(METHOD_DIRS.afm, diskId, diskId);
-  if (!fs.existsSync(dir)) return [];
-  const models = [];
-  for (let n = 0; n <= 4; n++) {
-    const f = path.join(dir, `ranked_${n}.pdb`);
-    if (fs.existsSync(f)) models.push({ model: n, file: f, format: 'pdb' });
-  }
-  return models;
+  const f = path.join(METHOD_DIRS.afm, diskId, diskId, 'ranked_0.pdb');
+  return fs.existsSync(f) ? [{ model: 0, file: f, format: 'pdb' }] : [];
 }
 
 function resolveBoltz2(id) {
@@ -343,14 +335,8 @@ function resolveBoltz2(id) {
 
 function resolveChai(id) {
   const diskId = resolveDiskId(id);
-  const dir = path.join(METHOD_DIRS.chai, 'models', diskId);
-  if (!fs.existsSync(dir)) return [];
-  const models = [];
-  for (let n = 0; n <= 4; n++) {
-    const f = path.join(dir, `pred.model_idx_${n}.cif`);
-    if (fs.existsSync(f)) models.push({ model: n, file: f, format: 'cif' });
-  }
-  return models;
+  const f = path.join(METHOD_DIRS.chai, 'models', diskId, 'pred.model_idx_0.cif');
+  return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 
 function resolveEsmfold2(id) {

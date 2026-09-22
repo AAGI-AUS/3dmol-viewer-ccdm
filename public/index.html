@@ -270,17 +270,6 @@
   .method-btn.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent-2); }
   .method-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  /* Model selector */
-  .model-section { margin-bottom: 20px; }
-  .model-grid { display: flex; gap: 8px; flex-wrap: wrap; }
-  .model-btn {
-    flex: 1; min-width: 48px; padding: 8px 4px; background: var(--bg-sunken);
-    border: 1px solid var(--border); border-radius: 6px; color: var(--text-dim);
-    font-size: 0.85rem; cursor: pointer; text-align: center; transition: all .15s;
-  }
-  .model-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-2); }
-  .model-btn.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent-2); font-weight: 700; }
-  .model-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
   /* Style selector */
   .style-row { display: flex; gap: 8px; margin-bottom: 18px; }
@@ -839,13 +828,6 @@
         <span style="color:var(--text-faint);font-size:.8rem">Select an interaction first</span>
       </div>
 
-      <div class="section-label">Model</div>
-      <div class="model-section">
-        <div class="model-grid" id="model-grid">
-          <!-- populated dynamically -->
-        </div>
-      </div>
-
       <button class="load-btn" id="load-btn" onclick="loadStructure()" disabled>Load Structure</button>
       <div class="status-msg" id="status"></div>
       <div class="pane-hint">
@@ -970,7 +952,7 @@
         <line x1="32" y1="58" x2="50" y2="28" stroke="currentColor" stroke-width="3"/>
         <line x1="32" y1="65" x2="68" y2="65" stroke="currentColor" stroke-width="3"/>
       </svg>
-      <p>Select a protein pair and model to view</p>
+      <p>Select a protein pair and prediction method to view</p>
     </div>
     <div class="spinner" id="spinner"><div class="spin"></div></div>
 
@@ -1100,7 +1082,9 @@
 let token = sessionStorage.getItem('token') || null;
 let selectedEntry = null;   // full metadata row for the chosen interaction
 let selectedMethod = null;  // 'af3' | 'afm' | 'boltz2' | 'chai' | 'esmfold2'
-let selectedModel = null;
+// Only the best-ranked prediction is served, so the model segment of the
+// structure API is fixed at 0 (issue #21).
+const MODEL = 0;
 let methodAvailability = {};
 let currentStyle = 'cartoon';
 let viewer = null;
@@ -1429,7 +1413,6 @@ async function selectEntry(identifier) {
   if (!entry) return;
   selectedEntry = entry;
   selectedMethod = null;
-  selectedModel = null;
   methodAvailability = {};
   renderEntries(allEntries);
   renderMetaPanel(entry);
@@ -1440,7 +1423,6 @@ async function selectEntry(identifier) {
   renderChainLegend();
 
   document.getElementById('method-row').innerHTML = '<span style="color:var(--text-faint);font-size:.8rem">Loading methods…</span>';
-  document.getElementById('model-grid').innerHTML = '';
 
   const data = await apiGet(`/api/methods/${encodeURIComponent(identifier)}`);
   methodAvailability = data ? data.methods : {};
@@ -1497,40 +1479,13 @@ function selectMethod(method) {
   const info = methodAvailability[method];
   if (!info || !info.models || !info.models.length) return;
   selectedMethod = method;
-  selectedModel = null;
   renderMethods();
   renderQualityPreview();
-  renderModels(info.models);
-  updateLoadBtn();
-}
-
-// ── Models ────────────────────────────────────────────────────────────────────
-function renderModels(models) {
-  const grid = document.getElementById('model-grid');
-  if (!models || !models.length) {
-    grid.innerHTML = '<span style="color:var(--text-faint);font-size:.85rem">Select a method</span>';
-    return;
-  }
-  grid.innerHTML = [0,1,2,3,4].map(n => {
-    const avail = models.includes(n);
-    return `<button class="model-btn${n === selectedModel ? ' active' : ''}"
-              onclick="selectModel(${n})" ${avail ? '' : 'disabled'}>
-              ${n}
-            </button>`;
-  }).join('');
-}
-
-function selectModel(n) {
-  selectedModel = n;
-  document.querySelectorAll('.model-btn').forEach((b, i) => {
-    b.classList.toggle('active', i === n);
-  });
   updateLoadBtn();
 }
 
 function updateLoadBtn() {
-  document.getElementById('load-btn').disabled =
-    !(selectedEntry && selectedMethod && selectedModel !== null);
+  document.getElementById('load-btn').disabled = !(selectedEntry && selectedMethod);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -1572,11 +1527,10 @@ function setStyle(style) {
 // Every AFM/AF3/Boltz-2/Chai/ESMFold2 model in this collection is built the
 // same way: chain A is the pathogen effector, chain B the host target protein.
 // Everything user-facing spells that out so the two halves are never confused.
-// Chain letters are not dependable: AlphaFold-Multimer writes its unrelaxed
-// models (ranked_1..4) starting at B, so the same complex is A/B in model 0 and
-// B/C in models 1-4. Roles are therefore resolved from each loaded structure
-// rather than assumed from the letter, and everything downstream — colours,
-// protein names, the legend, interface residues — keys off the role.
+// Chain letters are not dependable across methods, so roles are resolved from
+// each loaded structure rather than assumed from the letter, and everything
+// downstream — colours, protein names, the legend, interface residues — keys
+// off the role.
 let chainRoles = { A: 'Effector', B: 'Target' };
 
 // Chains come in input order (effector first, then target). Where the curated
@@ -1788,7 +1742,7 @@ function applyInterfaceOverlay() {
 
 // ── Load structure ────────────────────────────────────────────────────────────
 async function loadStructure() {
-  if (!selectedEntry || !selectedMethod || selectedModel === null) return;
+  if (!selectedEntry || !selectedMethod) return;
   const id = selectedEntry.identifier;
 
   setStatus('Loading…', '');
@@ -1796,7 +1750,7 @@ async function loadStructure() {
 
   try {
     const resp = await fetch(
-      `/api/structure/${selectedMethod}/${encodeURIComponent(id)}/${selectedModel}`,
+      `/api/structure/${selectedMethod}/${encodeURIComponent(id)}/${MODEL}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!resp.ok) throw new Error((await resp.json()).error || 'Failed');
@@ -1814,7 +1768,7 @@ async function loadStructure() {
     viewer.addModel(text, fmt);
     structureLoaded = true;
     loadedStructure = {
-      entry: selectedEntry, method: selectedMethod, model: selectedModel,
+      entry: selectedEntry, method: selectedMethod, model: MODEL,
       label: (methodAvailability[selectedMethod] || {}).label || selectedMethod,
     };
     currentStructureText = text;
@@ -1828,7 +1782,7 @@ async function loadStructure() {
     viewer.render();
     document.getElementById('interface-section').style.display = 'block';
     const methodLabel = (methodAvailability[selectedMethod] || {}).label || selectedMethod;
-    setStatus(`Loaded: ${entryLabel(selectedEntry)} · ${methodLabel} · Model ${selectedModel}`, 'ok');
+    setStatus(`Loaded: ${entryLabel(selectedEntry)} · ${methodLabel}`, 'ok');
     updateShowingBar();
     updateExportMenu();
   } catch (err) {
@@ -1875,8 +1829,8 @@ function sanitizeFilename(s) {
 
 function exportBaseName() {
   if (!loadedStructure) return 'structure';
-  const { entry, method, model } = loadedStructure;
-  return sanitizeFilename(`${entry.identifier}_${method}_model${model}`);
+  const { entry, method } = loadedStructure;
+  return sanitizeFilename(`${entry.identifier}_${method}`);
 }
 
 function triggerDownload(url, filename) {
@@ -2454,8 +2408,6 @@ function depthColor(t, alpha) {
   return `hsla(200, ${(45 + 40 * c).toFixed(0)}%, ${(32 + 24 * c).toFixed(0)}%, ${alpha})`;
 }
 
-function plural(n, word) { return `${n} ${word}${n === 1 ? '' : 's'}`; }
-
 function formatScore(metric, v) {
   if (metric.scale === 'count') {
     return v >= 10000 ? Math.round(v).toLocaleString()
@@ -2573,7 +2525,7 @@ function renderScoreCards(methods) {
       s.ipTM !== undefined ? `<div>ipTM <b>${s.ipTM.toFixed(3)}</b></div>` : '',
     ].join('');
     const note = hasStructure(m)
-      ? `<div class="mcard-note">${plural(methodAvailability[m].models.length, 'model')} available</div>`
+      ? '<div class="mcard-note">Structure available</div>'
       : '<div class="mcard-note warn">Scores only — no structure files</div>';
     return `<div class="mcard${m === best ? ' best' : ''}">
               ${m === best ? '<span class="mcard-tag">Best ranking</span>' : ''}
@@ -2605,7 +2557,7 @@ function renderMatrix(methods) {
       ${methods.map(m => `<th class="method-head${m === selectedMethod ? ' sel' : ''}"
            onclick="pickMethodFromPanel('${m}')"
            title="${hasStructure(m) ? 'Click to select this method' : 'No structure files for this method'}">
-           ${escapeHtml(methodShort(m))}<small>${hasStructure(m) ? plural(methodAvailability[m].models.length, 'model') : 'no structure'}</small>
+           ${escapeHtml(methodShort(m))}<small>${hasStructure(m) ? 'structure' : 'no structure'}</small>
          </th>`).join('')}
     </tr></thead>`;
 
@@ -2755,10 +2707,10 @@ function updateShowingBar() {
     bar.textContent = 'No structure loaded yet.';
     return;
   }
-  const { entry, model, label } = loadedStructure;
+  const { entry, label } = loadedStructure;
   const stale = selectedEntry && selectedEntry.identifier !== entry.identifier;
   bar.className = 'showing-bar' + (stale ? ' stale' : '');
-  bar.innerHTML = `Showing <b>${escapeHtml(entryLabel(entry))}</b> · ${escapeHtml(label)} · Model ${model}` +
+  bar.innerHTML = `Showing <b>${escapeHtml(entryLabel(entry))}</b> · ${escapeHtml(label)}` +
     (stale ? '<br>Selection has moved to another interaction — load it to update the view.' : '');
 }
 
@@ -2766,15 +2718,15 @@ function updateShowingBar() {
 // ── Help & feedback ───────────────────────────────────────────────────────────
 const REPO_URL = 'https://github.com/AAGI-AUS/3dmol-viewer-ccdm';
 
-// A question about "this model" is only answerable if the model is named, so the
+// A question about "this structure" is only answerable if it is named, so the
 // new-issue form is pre-filled with whatever the viewer is showing.
 function issueContext() {
   if (!loadedStructure) return null;
-  const { entry, label, model } = loadedStructure;
+  const { entry, label } = loadedStructure;
   return [
     `- Interaction: ${entryLabel(entry)} (\`${entry.identifier}\`)`,
     `- Species: ${entrySub(entry)}`,
-    `- Prediction: ${label}, model ${model}`,
+    `- Prediction: ${label}`,
   ].join('\n');
 }
 
@@ -2787,9 +2739,9 @@ function openHelp() {
     REPO_URL + '/issues/new' + (body ? '?body=' + encodeURIComponent(body) : '');
   document.getElementById('help-context').textContent = context
     ? 'The issue will be pre-filled with the structure you are viewing — ' +
-      `${entryLabel(loadedStructure.entry)}, ${loadedStructure.label}, model ${loadedStructure.model}. ` +
+      `${entryLabel(loadedStructure.entry)}, ${loadedStructure.label}. ` +
       'You can delete that from the form if it is not relevant.'
-    : 'Load a structure first if your question is about a particular model — the issue is then pre-filled with which one.';
+    : 'Load a structure first if your question is about a particular structure — the issue is then pre-filled with which one.';
   document.getElementById('help-overlay').classList.add('open');
 }
 
