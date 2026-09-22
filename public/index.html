@@ -73,6 +73,7 @@
     --track:         rgba(255,255,255,.10);
     --label-hl-bg:   #FFD700;
     --label-hl-fg:   #000000;
+    --seq-sel-ring:  #FF2D95;
   }
 
   :root[data-theme="light"] {
@@ -134,6 +135,7 @@
     --track:         rgba(0,0,0,.08);
     --label-hl-bg:   #2C2C1F;
     --label-hl-fg:   #F5F5DC;
+    --seq-sel-ring:  #D6006E;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -363,13 +365,44 @@
     width: 15px; height: 20px; font-size: 12px; font-weight: 700;
     font-family: 'Courier New', monospace;
     cursor: pointer; border-radius: 2px; color: var(--seq-res);
-    transition: background .1s, color .1s; position: relative;
+    transition: background .1s, color .1s, box-shadow .1s; position: relative;
   }
   /* Each residue carries its chain colour inline, and an inline style outranks
      a class rule — so the hover feedback has to be marked important to win. */
   .seq-res:hover { background: var(--hover-bg); color: var(--text) !important; }
   .seq-res.labeled { background: var(--label-hl-bg); color: var(--label-hl-fg) !important; font-weight: 700; border-radius: 3px; }
   .seq-res.iface { border-bottom: 2px solid; }
+  /* pLDDT mode paints the confidence band straight onto the residue, so the
+     score reads in the sequence track the same way it does in the 3D view.
+     The band rides on a custom property instead of an inline background, which
+     leaves the hover and selection rules below able to win the cascade. */
+  .seq-res.plddt { background: var(--plddt-bg); color: var(--plddt-fg) !important; }
+  /* Hovering and selecting must not repaint the band — a residue that changed
+     colour on click would read as a change of score. Both mark themselves with
+     a ring drawn inside the cell instead: neutral for hover, and for selection
+     a magenta deliberately kept off the blue-to-orange pLDDT ramp so it cannot
+     be mistaken for a confidence band. */
+  .seq-res.plddt:hover {
+    background: var(--plddt-bg); color: var(--plddt-fg) !important;
+    box-shadow: inset 0 0 0 2px var(--text);
+  }
+  .seq-res.plddt.labeled {
+    background: var(--plddt-bg); color: var(--plddt-fg) !important;
+    box-shadow: inset 0 0 0 2px var(--seq-sel-ring), 0 0 0 1px var(--bg-seq);
+    border-radius: 3px; z-index: 1;
+  }
+  /* Compact restatement of the sidebar pLDDT key, so the bands can be read
+     without looking away from the sequences. */
+  .seq-plddt-legend { display: none; align-items: center; gap: 10px; flex-shrink: 0; }
+  .seq-plddt-legend.visible { display: flex; }
+  .seq-plddt-legend span {
+    font-size: .62rem; font-weight: 600; text-transform: none;
+    letter-spacing: 0; color: var(--text-dim); white-space: nowrap;
+  }
+  .seq-plddt-legend i {
+    display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+    margin-right: 4px; vertical-align: -1px;
+  }
   .seq-num {
     display: inline-flex; align-items: flex-end;
     font-size: 9px; font-family: monospace; color: var(--seq-num);
@@ -987,6 +1020,12 @@
   <div id="sequence-panel">
     <div class="seq-panel-header">
       <span id="seq-panel-title">Protein Sequences</span>
+      <div id="seq-plddt-legend" class="seq-plddt-legend" title="Per-residue pLDDT confidence">
+        <span><i style="background:#0053D6"></i>&gt; 90</span>
+        <span><i style="background:#65CBF3"></i>70&ndash;90</span>
+        <span><i style="background:#FFDB13"></i>50&ndash;70</span>
+        <span><i style="background:#FF7D45"></i>&lt; 50</span>
+      </div>
       <button onclick="toggleSequence()" style="
         background:none; border:1px solid var(--border); border-radius:5px;
         color:var(--text-dim); font-size:.7rem; padding:2px 8px; cursor:pointer;">
@@ -1103,6 +1142,7 @@ let spinning = false;
 let sequenceData = null;
 let sequenceVisible = false;
 let plddtMode = false;
+let plddtByResidue = null;   // 'chain:resi' -> pLDDT, read off the loaded model
 // What the viewer is actually showing right now — not the same thing as the
 // sidebar selection, which moves on as soon as another interaction is clicked.
 let loadedStructure = null;  // { entry, method, model }
@@ -1692,11 +1732,45 @@ function plddtColor(atom) {
   return '#FF7D45';
 }
 
+// Per-residue pLDDT taken off the model already in the viewer, so the sequence
+// track and the 3D view are coloured from the same numbers. The AlphaFold-family
+// writers put one score on every atom of a residue, so the CA carries it; the
+// mean over the residue is only a fallback for files without a CA. Left null for
+// anything whose B-factor column is not a confidence score.
+function computePlddtMap() {
+  plddtByResidue = null;
+  if (!viewer) return;
+  const acc = {};
+  for (const a of viewer.selectedAtoms({}) || []) {
+    if (typeof a.b !== 'number' || !isFinite(a.b)) continue;
+    const key = `${a.chain}:${a.resi}`;
+    const e = acc[key] || (acc[key] = { sum: 0, n: 0, ca: null });
+    e.sum += a.b;
+    e.n++;
+    if (a.atom === 'CA') e.ca = a.b;
+  }
+  const map = {};
+  let any = false;
+  for (const [key, e] of Object.entries(acc)) {
+    map[key] = e.ca !== null ? e.ca : e.sum / e.n;
+    any = true;
+  }
+  if (any) plddtByResidue = map;
+}
+
+function residuePlddt(chain, resi) {
+  if (!plddtByResidue) return null;
+  const v = plddtByResidue[`${chain}:${resi}`];
+  return typeof v === 'number' ? v : null;
+}
+
 function onPlddtToggle() {
   plddtMode = document.getElementById('plddt-toggle').checked;
   document.getElementById('plddt-legend').classList.toggle('visible', plddtMode);
   document.getElementById('color-section').classList.toggle('disabled', plddtMode);
   if (structureLoaded) applyStyle();
+  // The sequence tracks carry the same banding, so they follow the toggle too.
+  if (sequenceData) renderSequence();
 }
 
 function applyStyle() {
@@ -1767,12 +1841,14 @@ async function loadStructure() {
     viewer.clear();
     interfaceData = null;
     sequenceData = null;
+    plddtByResidue = null;
     structureLoaded = false;
     loadedStructure = null;
     clearLabels();
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('iface-status').textContent = '';
     viewer.addModel(text, fmt);
+    computePlddtMap();
     structureLoaded = true;
     loadedStructure = {
       entry: selectedEntry, method: selectedMethod, model: MODEL,
@@ -2271,6 +2347,12 @@ function renderSequence() {
       .map(c => `Chain ${c}: ${chainRole(c) || 'unassigned'}`).join(' · ');
   }
 
+  // Only claim the bands when they are actually painted: pLDDT mode is on and
+  // the file carried per-residue scores to paint with.
+  const bandBy = plddtMode && plddtByResidue;
+  const seqLegend = document.getElementById('seq-plddt-legend');
+  if (seqLegend) seqLegend.classList.toggle('visible', !!bandBy);
+
   let html = '';
   for (const [chain, residues] of Object.entries(sequenceData).sort()) {
     const col = chainColor(chain, 'base');
@@ -2289,13 +2371,20 @@ function renderSequence() {
       const aa1     = AA3TO1[resn] || '?';
       const labeled = !!activeLabels[`${chain}:${resi}`];
       const iface   = interfaceData && (interfaceData[chain] || []).includes(resi);
+      const score   = residuePlddt(chain, resi);
+      // In pLDDT mode the residue wears its confidence band; otherwise it keeps
+      // the chain colour. The interface underline survives either way.
+      const band    = bandBy && score !== null ? plddtColor({ b: score }) : null;
+      const style   = [];
+      if (band) style.push(`--plddt-bg:${band}`, `--plddt-fg:${textOn(band)}`);
+      else      style.push(`color:${iface ? chainColor(chain, 'iface') : col}`);
+      if (iface) style.push(`border-color:${chainColor(chain, 'iface')}`);
+      const tip = `${resn} ${resi}` + (score === null ? '' : ` · pLDDT ${score.toFixed(1)}`);
       html += `<span
-        class="seq-res${labeled ? ' labeled' : ''}${iface ? ' iface' : ''}"
+        class="seq-res${band ? ' plddt' : ''}${labeled ? ' labeled' : ''}${iface ? ' iface' : ''}"
         id="seq-${chain}-${resi}"
-        style="${iface
-          ? `color:${chainColor(chain, 'iface')};border-color:${chainColor(chain, 'iface')}`
-          : `color:${col}`}"
-        title="${resn} ${resi}"
+        style="${style.join(';')}"
+        title="${escapeAttr(tip)}"
         onclick="clickSeqResidue('${chain}',${resi},'${resn}')">
           ${aa1}
         </span>`;
