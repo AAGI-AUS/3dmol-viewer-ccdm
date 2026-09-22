@@ -575,13 +575,15 @@
   }
   .score-head h3 { font-size: 1rem; color: var(--text-hi); font-weight: 700; margin-bottom: 3px; }
   .score-head .sub { font-size: .76rem; color: var(--text-dim); line-height: 1.5; }
-  .score-head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+  .score-head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
   .seg { display: flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
   .seg button {
     background: var(--bg-sunken); border: none; color: var(--text-dim); font-size: .76rem;
     padding: 6px 12px; cursor: pointer; font-weight: 600;
   }
   .seg button.active { background: var(--accent-bg); color: var(--accent-3); }
+  /* Rows a summary row was combined from — indented so the grouping reads */
+  .matrix tr.detail-row .metric-col { padding-left: 22px; font-weight: 500; opacity: .85; }
   .ghost-btn {
     background: var(--bg-sunken); border: 1px solid var(--border); border-radius: 7px;
     color: var(--text-muted); font-size: .76rem; padding: 6px 12px; cursor: pointer; font-weight: 600;
@@ -1067,10 +1069,15 @@
       </div>
       <div class="score-head-actions">
         <div class="seg">
+          <button id="score-scope-summary" class="active" onclick="setScoreScope('summary')">Summary</button>
+          <button id="score-scope-extended" onclick="setScoreScope('extended')">Extended</button>
+        </div>
+        <div class="seg">
           <button id="score-view-heatmap" class="active" onclick="setScoreView('heatmap')">Heatmap</button>
           <button id="score-view-table" onclick="setScoreView('table')">Table</button>
         </div>
         <button class="ghost-btn" id="score-copy-btn" onclick="copyScoreTsv()">Copy as TSV</button>
+        <button class="ghost-btn" onclick="downloadScoreCsv()" title="Every metric, including both directions of LIS and ipSAE">Download CSV</button>
         <button class="score-close" onclick="closeScorePanel()" title="Close (Esc)">&times;</button>
       </div>
     </div>
@@ -2365,6 +2372,11 @@ function showSpinner(on) {
 // so the sidebar preview and the overlay both render without a round trip.
 let scoreSchema = null;     // { groups, metrics, methodLabels }
 let scoreView = 'heatmap';  // 'heatmap' | 'table'
+// LIS, ipSAE and MSA depth each arrive split across several columns. The
+// summary tab carries one combined row per quantity; the extended tab adds the
+// rows they were combined from, so both directions stay one click away
+// (issue #22).
+let scoreScope = 'summary'; // 'summary' | 'extended'
 
 async function loadScoreSchema() {
   scoreSchema = await apiGet('/api/scores/metrics');
@@ -2485,6 +2497,10 @@ function setScoreView(v) {
   scoreView = v;
   renderScorePanel();
 }
+function setScoreScope(v) {
+  scoreScope = v;
+  renderScorePanel();
+}
 
 function ringSvg(v, color) {
   const r = 17, c = 2 * Math.PI * r;
@@ -2544,9 +2560,11 @@ function renderScoreCards(methods) {
 
 // One row per metric, one column per method that produced numbers. Rows where
 // nothing was computed anywhere are dropped rather than shown as a row of "—".
-function visibleMetrics(methods) {
+function visibleMetrics(methods, scope) {
   if (!scoreSchema) return [];
+  const withDetail = (scope || scoreScope) === 'extended';
   return scoreSchema.metrics.filter(mt =>
+    (withDetail || !mt.detail) &&
     methods.some(m => (methodScores(m) || {})[mt.key] !== undefined));
 }
 
@@ -2574,7 +2592,7 @@ function renderMatrix(methods) {
       const lo = Math.min(...present), hi = Math.max(...present);
       const bestVal = mt.better === 'low' ? lo : hi;
 
-      body += `<tr>
+      body += `<tr${mt.detail ? ' class="detail-row"' : ''}>
         <td class="metric-col">${escapeHtml(mt.label)}${mt.sub ? `<small>${escapeHtml(mt.sub)}</small>` : ''}</td>` +
         methods.map((m, i) => {
           const v = vals[i];
@@ -2617,6 +2635,8 @@ function renderScorePanel() {
 
   document.getElementById('score-view-heatmap').classList.toggle('active', scoreView === 'heatmap');
   document.getElementById('score-view-table').classList.toggle('active', scoreView === 'table');
+  document.getElementById('score-scope-summary').classList.toggle('active', scoreScope === 'summary');
+  document.getElementById('score-scope-extended').classList.toggle('active', scoreScope === 'extended');
 
   if (!methods.length) { body.innerHTML = '<div class="quality-empty">Nothing to compare.</div>'; return; }
 
@@ -2628,6 +2648,11 @@ function renderScorePanel() {
        <div>★ best value in the row</div>
        <div>— not computed for that method</div>
        <div>MSA depth cells are shaded relative to the other methods in the same row.</div>
+       <div>LIS and ipSAE are the larger of their two directions; MSA depth is the
+            non-gap depth where the method reports one, otherwise the unpaired depth.
+            ${scoreScope === 'extended'
+              ? 'The indented rows are the values they were combined from.'
+              : 'The Extended tab, and the CSV, show the values they were combined from.'}</div>
      </div>`;
 }
 
@@ -2638,6 +2663,8 @@ function pickMethodFromPanel(m) {
 }
 
 // Tab-separated so it drops straight into a spreadsheet next to the source TSV.
+// Copy follows the tab on screen; the CSV always carries everything, so the
+// directional LIS/ipSAE values are one download away whichever tab is open.
 function copyScoreTsv() {
   const methods = scoredMethods();
   const metrics = visibleMetrics(methods);
@@ -2654,6 +2681,32 @@ function copyScoreTsv() {
     b.textContent = 'Copied';
     setTimeout(() => { b.textContent = 'Copy as TSV'; }, 1400);
   });
+}
+
+function csvCell(v) {
+  const s = String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function downloadScoreCsv() {
+  const methods = scoredMethods();
+  if (!methods.length) return;
+  const metrics = visibleMetrics(methods, 'extended');
+  const rows = [['Metric', 'Detail', 'Combined from', ...methods.map(m => methodDisplayName(m))]];
+  for (const mt of metrics) {
+    rows.push([
+      mt.label,
+      mt.sub || '',
+      mt.detail ? 'yes' : '',
+      ...methods.map(m => {
+        const v = (methodScores(m) || {})[mt.key];
+        return v === undefined ? 'NA' : v;
+      }),
+    ]);
+  }
+  const csv = rows.map(r => r.map(csvCell).join(',')).join('\n');
+  downloadBlob(new Blob([csv], { type: 'text/csv' }),
+               sanitizeFilename(`${selectedEntry.identifier}_scores`) + '.csv');
 }
 
 document.addEventListener('keydown', e => {
