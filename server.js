@@ -80,19 +80,23 @@ const SCORE_METRICS = [
   { key: 'pdockq',                group: 'interface', label: 'pDockQ',             scale: 'unit',  better: 'high', desc: 'Predicted DockQ score for the interface' },
   { key: 'pdockq2_A',             group: 'interface', label: 'pDockQ2',            sub: 'effector (A)',      scale: 'unit',  better: 'high', desc: 'pDockQ2 computed on chain A, the effector' },
   { key: 'pdockq2_B',             group: 'interface', label: 'pDockQ2',            sub: 'target (B)',        scale: 'unit',  better: 'high', desc: 'pDockQ2 computed on chain B, the target' },
-  { key: 'LIS_pep_rec',           group: 'interface', label: 'LIS pep→rec',        sub: 'effector → target', scale: 'unit',  better: 'high', desc: 'Local interaction score, effector onto target' },
-  { key: 'LIS_rec_pep',           group: 'interface', label: 'LIS rec→pep',        sub: 'target → effector', scale: 'unit',  better: 'high', desc: 'Local interaction score, target onto effector' },
-  { key: 'ipSAE_A_B',             group: 'interface', label: 'ipSAE A→B',          sub: 'effector → target', scale: 'unit',  better: 'high', desc: 'Interface pairwise score, effector onto target' },
-  { key: 'ipSAE_B_A',             group: 'interface', label: 'ipSAE B→A',          sub: 'target → effector', scale: 'unit',  better: 'high', desc: 'Interface pairwise score, target onto effector' },
+  { key: 'LIS',                   group: 'interface', label: 'LIS',                sub: 'best direction',    scale: 'unit',  better: 'high', desc: 'Local interaction score — the larger of the two directions (effector→target, target→effector)' },
+  { key: 'LIS_pep_rec',           group: 'interface', label: 'LIS pep→rec',        sub: 'effector → target', scale: 'unit',  better: 'high', detail: true, desc: 'Local interaction score, effector onto target' },
+  { key: 'LIS_rec_pep',           group: 'interface', label: 'LIS rec→pep',        sub: 'target → effector', scale: 'unit',  better: 'high', detail: true, desc: 'Local interaction score, target onto effector' },
+  { key: 'ipSAE',                 group: 'interface', label: 'ipSAE',              sub: 'best direction',    scale: 'unit',  better: 'high', desc: 'Interface pairwise score — the larger of the two directions (A→B, B→A)' },
+  { key: 'ipSAE_A_B',             group: 'interface', label: 'ipSAE A→B',          sub: 'effector → target', scale: 'unit',  better: 'high', detail: true, desc: 'Interface pairwise score, effector onto target' },
+  { key: 'ipSAE_B_A',             group: 'interface', label: 'ipSAE B→A',          sub: 'target → effector', scale: 'unit',  better: 'high', detail: true, desc: 'Interface pairwise score, target onto effector' },
   { key: 'fraction_disorder',     group: 'chains',    label: 'Fraction disorder',  sub: 'lower is better', scale: 'unit',  better: 'low',  desc: 'Fraction of residues predicted disordered — lower is better' },
   { key: 'effector_pTM',          group: 'chains',    label: 'Effector pTM',       sub: 'chain A',  scale: 'unit',  better: 'high' },
-  { key: 'effector_unpaired_msa', group: 'chains',    label: 'Effector MSA depth', sub: 'unpaired', scale: 'count', better: 'high' },
-  { key: 'effector_paired_msa',   group: 'chains',    label: 'Effector MSA depth', sub: 'paired',   scale: 'count', better: 'high' },
-  { key: 'effector_msa_nongap',   group: 'chains',    label: 'Effector MSA depth', sub: 'non-gap',  scale: 'count', better: 'high' },
+  { key: 'msa_depth_effector',    group: 'chains',    label: 'MSA depth effector', sub: 'per method', scale: 'count', better: 'high', desc: 'Depth of the effector alignment: the non-gap depth where the method reports one, otherwise the unpaired depth' },
+  { key: 'effector_unpaired_msa', group: 'chains',    label: 'Effector MSA depth', sub: 'unpaired', scale: 'count', better: 'high', detail: true },
+  { key: 'effector_paired_msa',   group: 'chains',    label: 'Effector MSA depth', sub: 'paired',   scale: 'count', better: 'high', detail: true },
+  { key: 'effector_msa_nongap',   group: 'chains',    label: 'Effector MSA depth', sub: 'non-gap',  scale: 'count', better: 'high', detail: true },
   { key: 'host_pTM',              group: 'chains',    label: 'Host pTM',           sub: 'chain B',  scale: 'unit',  better: 'high' },
-  { key: 'host_unpaired_msa',     group: 'chains',    label: 'Host MSA depth',     sub: 'unpaired', scale: 'count', better: 'high' },
-  { key: 'host_paired_msa',       group: 'chains',    label: 'Host MSA depth',     sub: 'paired',   scale: 'count', better: 'high' },
-  { key: 'host_msa_nongap',       group: 'chains',    label: 'Host MSA depth',     sub: 'non-gap',  scale: 'count', better: 'high' },
+  { key: 'msa_depth_host',        group: 'chains',    label: 'MSA depth host',     sub: 'per method', scale: 'count', better: 'high', desc: 'Depth of the host alignment: the non-gap depth where the method reports one, otherwise the unpaired depth' },
+  { key: 'host_unpaired_msa',     group: 'chains',    label: 'Host MSA depth',     sub: 'unpaired', scale: 'count', better: 'high', detail: true },
+  { key: 'host_paired_msa',       group: 'chains',    label: 'Host MSA depth',     sub: 'paired',   scale: 'count', better: 'high', detail: true },
+  { key: 'host_msa_nongap',       group: 'chains',    label: 'Host MSA depth',     sub: 'non-gap',  scale: 'count', better: 'high', detail: true },
 ];
 
 // Each method reports a different subset of the metrics above, under its own
@@ -165,6 +169,34 @@ function seqLength(seq) {
   return clean.length || null;
 }
 
+// LIS and ipSAE are each reported once per direction, and MSA depth under
+// whichever variant the method happens to record. The comparison table reads as
+// one line per quantity (issue #22), so each pair is collapsed here: the two
+// directions to their maximum, the depth variants to the one that is comparable
+// across methods — non-gap where it exists, unpaired otherwise, which is the
+// same measurement under another name. The raw columns stay in the payload and
+// are shown in the extended view.
+function maxDefined(...vals) {
+  const present = vals.filter(v => v !== undefined);
+  return present.length ? Math.max(...present) : undefined;
+}
+
+function firstDefined(...vals) {
+  return vals.find(v => v !== undefined);
+}
+
+function deriveCombinedScores(values) {
+  const derived = {
+    LIS: maxDefined(values.LIS_pep_rec, values.LIS_rec_pep),
+    ipSAE: maxDefined(values.ipSAE_A_B, values.ipSAE_B_A),
+    msa_depth_effector: firstDefined(values.effector_msa_nongap, values.effector_unpaired_msa),
+    msa_depth_host: firstDefined(values.host_msa_nongap, values.host_unpaired_msa),
+  };
+  for (const [key, v] of Object.entries(derived)) {
+    if (v !== undefined) values[key] = v;
+  }
+}
+
 function extractScores(cols, headerIndex) {
   const scores = {};
   for (const [method, mapping] of Object.entries(METHOD_SCORE_COLUMNS)) {
@@ -175,6 +207,7 @@ function extractScores(cols, headerIndex) {
       const v = parseScore(cols[idx]);
       if (v !== null) values[metric] = v;
     }
+    deriveCombinedScores(values);
     if (Object.keys(values).length) scores[method] = values;
   }
   return scores;
