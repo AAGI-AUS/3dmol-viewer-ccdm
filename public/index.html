@@ -1174,11 +1174,7 @@
     <h4>Legally binding terms of use</h4>
     <blockquote>
       By using this information, you agree to AlphaFold 3 Output Terms of Use found at
-      https://github.com/google-deepmind/alphafold3/blob/main/OUTPUT_TERMS_OF_USE.md.<br><br>
-      To request access to the AlphaFold 3 model parameters, follow the process set out at
-      https://github.com/google-deepmind/alphafold3. You may only use these if received directly
-      from Google. Use is subject to terms of use available at
-      https://github.com/google-deepmind/alphafold3/blob/main/WEIGHTS_TERMS_OF_USE.md.
+      https://github.com/google-deepmind/alphafold3/blob/main/OUTPUT_TERMS_OF_USE.md.
     </blockquote>
     <div class="help-actions">
       <a href="legal/AF3_OUTPUT_TERMS_OF_USE.txt" target="_blank" rel="noopener noreferrer">Copy of the Output Terms of Use</a>
@@ -3024,17 +3020,11 @@ document.getElementById('help-overlay').addEventListener('click', e => {
 });
 
 // ── AlphaFold 3 terms of use (issue #27) ──────────────────────────────────────
-// The notice wording is fixed by section 5 of the AlphaFold 3 Output Terms of
-// Use, so it must stay verbatim. A .cif export already carries it in its header,
-// but images, videos and score tables would lose it without the additions below.
+// The notice wording comes from section 5 of the AlphaFold 3 Output Terms of Use.
+// A .cif export already carries the notice in its header, but images, videos and
+// score tables would lose it without the additions below.
 const AF3_TERMS_URL = 'https://github.com/google-deepmind/alphafold3/blob/main/OUTPUT_TERMS_OF_USE.md';
-const AF3_NOTICE = [
-  `By using this information, you agree to AlphaFold 3 Output Terms of Use found at ${AF3_TERMS_URL}.`,
-  'To request access to the AlphaFold 3 model parameters, follow the process set out at '
-    + 'https://github.com/google-deepmind/alphafold3. You may only use these if received directly from Google. '
-    + 'Use is subject to terms of use available at '
-    + 'https://github.com/google-deepmind/alphafold3/blob/main/WEIGHTS_TERMS_OF_USE.md.',
-];
+const AF3_NOTICE = `By using this information, you agree to AlphaFold 3 Output Terms of Use found at ${AF3_TERMS_URL}.`;
 const AF3_CAPTION = 'AlphaFold 3 prediction (Abramson et al., Nature 2024). Non-commercial use only. '
   + `By using this information, you agree to AlphaFold 3 Output Terms of Use found at ${AF3_TERMS_URL}.`;
 
@@ -3089,7 +3079,7 @@ function af3TableNotice(methods) {
   if (!methods.includes('af3')) return '';
   return [
     '# AlphaFold 3 values below are for non-commercial use only. Cite Abramson et al., Nature (2024).',
-    ...AF3_NOTICE.map(l => `# ${l}`),
+    `# ${AF3_NOTICE}`,
   ].join('\n') + '\n';
 }
 

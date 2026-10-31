@@ -250,7 +250,7 @@ endorsed by Google, Google DeepMind or Isomorphic Labs, and it does not publish 
 model parameters.
 
 `public/legal/` holds a verbatim copy of the terms (`AF3_OUTPUT_TERMS_OF_USE.txt`) and the
-required notice (`LEGALLY_BINDING_TERMS_OF_USE.txt`). The viewer's § panel lists the
+notice (`LEGALLY_BINDING_TERMS_OF_USE.txt`). The viewer's § panel lists the
 modifications made to the predictions and the prediction metadata. Update that panel if the
 served files or the AlphaFold 3 run configuration change.
 
