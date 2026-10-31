@@ -8,7 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Features that are in development
+- AlphaFold 3 terms of use: a notice in the viewer, a terms panel, hosted copies of the
+  Output Terms of Use and the Legally Binding Terms of Use, and the notice on exported
+  images, videos and score tables (#27)
 
 ### Changed
 - Changes to existing functionality in development
