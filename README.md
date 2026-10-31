@@ -241,6 +241,19 @@ sudo systemctl reload nginx
 - Once a hostname is assigned, enable HTTPS via Let's Encrypt/Certbot and relax the firewall rule accordingly
 - `.env` is in `.gitignore` — never commit credentials to the repository
 
+## AlphaFold 3 Output
+
+AlphaFold 3 predictions shown or exported by this viewer are for non-commercial use only and
+are subject to the [AlphaFold 3 Output Terms of Use](https://github.com/google-deepmind/alphafold3/blob/main/OUTPUT_TERMS_OF_USE.md).
+Cite Abramson, J. et al., *Nature* 630, 493–500 (2024). This project is not affiliated with or
+endorsed by Google, Google DeepMind or Isomorphic Labs, and it does not publish the AlphaFold 3
+model parameters.
+
+`public/legal/` holds a verbatim copy of the terms (`AF3_OUTPUT_TERMS_OF_USE.txt`) and the
+notice (`LEGALLY_BINDING_TERMS_OF_USE.txt`). The viewer's § panel lists the
+modifications made to the predictions and the prediction metadata. Update that panel if the
+served files or the AlphaFold 3 run configuration change.
+
 ## License 
 This project is licensed under the BSD 3-Clause License. See [LICENSE](LICENSE) for details.
 

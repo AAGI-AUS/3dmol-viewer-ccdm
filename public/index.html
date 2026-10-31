@@ -776,6 +776,30 @@
   }
   .help-cta:hover { background: var(--accent-hover); }
   .help-note { font-size: .74rem; color: var(--text-faint); margin-top: 14px; line-height: 1.6; }
+
+  /* ── AlphaFold 3 terms of use (issue #27) ── */
+  .login-terms { font-size: .72rem; color: var(--text-dim); line-height: 1.55; margin-top: 16px; }
+  .login-terms a { color: var(--accent-2); }
+  .af3-notice {
+    display: none; position: absolute; left: 12px; bottom: 12px; z-index: 20;
+    max-width: calc(100% - 90px); padding: 6px 10px; border-radius: 6px;
+    background: var(--bg-elevated); border: 1px solid var(--warn-border);
+    font-size: .72rem; color: var(--text-soft); line-height: 1.5;
+  }
+  .af3-notice.visible { display: block; }
+  .af3-notice b { color: var(--warn); }
+  .link-btn {
+    background: none; border: none; padding: 0; font: inherit;
+    color: var(--accent-2); text-decoration: underline; cursor: pointer;
+  }
+  .terms-card { max-width: 680px; }
+  .terms-card .help-actions { font-size: .8rem; }
+  .terms-card h4 { font-size: .84rem; color: var(--text-hi); font-weight: 700; margin: 16px 0 6px; }
+  .terms-card blockquote {
+    font-size: .8rem; color: var(--text-soft); line-height: 1.6; margin: 0 0 12px;
+    padding: 8px 12px; border-left: 3px solid var(--warn-border); background: var(--bg-panel);
+    overflow-wrap: anywhere;
+  }
 </style>
 </head>
 <body>
@@ -795,6 +819,10 @@
     </div>
     <button class="login-btn" onclick="login()">Sign In</button>
     <div class="error-msg" id="login-error"></div>
+    <div class="login-terms">
+      This viewer includes AlphaFold 3 predictions, which are for non-commercial use only and
+      are subject to the <a href="legal/AF3_OUTPUT_TERMS_OF_USE.txt" target="_blank" rel="noopener noreferrer">AlphaFold 3 Output Terms of Use</a>.
+    </div>
   </div>
 </div>
 
@@ -804,6 +832,7 @@
     <div class="sidebar-header">
       <h2>🧬 PPI Viewer</h2>
       <div class="sidebar-header-actions">
+        <button class="help-btn" onclick="openTerms()" title="AlphaFold 3 terms of use">§</button>
         <button class="help-btn" onclick="openHelp()" title="Help &amp; feedback">?</button>
         <button class="logout-btn" onclick="logout()">Logout</button>
       </div>
@@ -991,6 +1020,13 @@
     </div>
     <div class="spinner" id="spinner"><div class="spin"></div></div>
 
+    <!-- Shown while an AlphaFold 3 model is on screen (issue #27) -->
+    <div class="af3-notice" id="af3-notice">
+      <b>AlphaFold 3 prediction — non-commercial use only.</b>
+      Subject to the AlphaFold 3 Output Terms of Use. Cite Abramson et al., <i>Nature</i> (2024).
+      <button class="link-btn" onclick="openTerms()">Terms and details</button>
+    </div>
+
     <!-- Floating viewer controls (bottom-right) -->
     <div class="viewer-controls">
       <button class="ctrl-btn" onclick="zoomIn()"     title="Zoom in">+</button>
@@ -1121,6 +1157,66 @@
       </div>
     </div>
     <div class="score-body" id="score-body"></div>
+  </div>
+</div>
+
+<!-- ── AlphaFold 3 terms of use (issue #27) ── -->
+<div class="help-overlay" id="terms-overlay">
+  <div class="help-card terms-card">
+    <div class="help-head">
+      <div>
+        <h3>AlphaFold 3 terms of use</h3>
+        <div style="font-size:.76rem;color:var(--text-dim)">These apply to the AlphaFold 3 predictions in this viewer and to anything derived from them.</div>
+      </div>
+      <button class="score-close" style="margin-left:auto" onclick="closeTerms()" title="Close (Esc)">&times;</button>
+    </div>
+
+    <h4>Legally binding terms of use</h4>
+    <blockquote>
+      By using this information, you agree to AlphaFold 3 Output Terms of Use found at
+      https://github.com/google-deepmind/alphafold3/blob/main/OUTPUT_TERMS_OF_USE.md.
+    </blockquote>
+    <div class="help-actions">
+      <a href="legal/AF3_OUTPUT_TERMS_OF_USE.txt" target="_blank" rel="noopener noreferrer">Copy of the Output Terms of Use</a>
+      <a href="legal/LEGALLY_BINDING_TERMS_OF_USE.txt" target="_blank" rel="noopener noreferrer">Legally Binding Terms of Use (text file)</a>
+    </div>
+
+    <h4>Non-commercial use only</h4>
+    <p>AlphaFold 3 predictions are provided for non-commercial use only. Please read the Output
+    Terms of Use for the full conditions, including who may use the predictions. If this summary
+    and those terms differ, the terms apply.</p>
+
+    <h4>Attribution and citation</h4>
+    <p>The AlphaFold 3 model was developed by Google DeepMind and Isomorphic Labs. This project is
+    not affiliated with or endorsed by Google, Google DeepMind or Isomorphic Labs. The AlphaFold 3
+    model parameters are not published or distributed here.</p>
+    <p>If you share these predictions or disclose findings from them, cite:
+    Abramson, J. et al. Accurate structure prediction of biomolecular interactions with AlphaFold 3.
+    <i>Nature</i> 630, 493–500 (2024).
+    <a href="https://doi.org/10.1038/s41586-024-07487-w" target="_blank" rel="noopener noreferrer">doi:10.1038/s41586-024-07487-w</a></p>
+
+    <h4>Modifications to the original predictions</h4>
+    <p>The coordinates and per-atom confidence values are not changed. The structure file is served
+    and exported exactly as AlphaFold 3 wrote it, under a new file name
+    (<code>&lt;identifier&gt;_af3.cif</code>). This project does add the following:</p>
+    <ul>
+      <li>3D and sequence-track views, with chain colouring, effector and target labels, and pLDDT colouring</li>
+      <li>Interface residues and the pDockQ, pDockQ2, LIS and ipSAE scores, calculated by this project rather than by AlphaFold 3</li>
+      <li>The composite score 0.8·ipTM + 0.2·pTM</li>
+      <li>Values rounded for display</li>
+      <li>A caption on exported images and videos, and a notice at the top of exported score tables</li>
+    </ul>
+    <p>Only one of the five samples from each run is shown, and the other samples are not distributed.</p>
+
+    <h4>Prediction details</h4>
+    <ul>
+      <li><b>Software:</b> AlphaFold 3 version 3.0.1, model AlphaFold-beta-20231127</li>
+      <li><b>Run dates:</b> 29 April to 3 May 2026</li>
+      <li><b>Configuration:</b> one seed (1) and five samples per pair, with unpaired MSAs, paired MSAs and templates as input</li>
+      <li><b>Structure shown:</b> seed 1, sample 0, which is not always the highest-ranked of the five samples</li>
+      <li><b>Scores shown:</b> pTM and ipTM come from the highest-ranked sample of the run, so they can differ from the values for sample 0</li>
+      <li><b>Confidence metrics:</b> per-atom pLDDT, stored in the B-factor column of the structure file, plus pTM, ipTM and fraction disordered</li>
+    </ul>
   </div>
 </div>
 
@@ -1871,6 +1967,7 @@ async function loadStructure() {
   } catch (err) {
     setStatus('Error: ' + err.message, 'error');
   } finally {
+    updateAf3Notice();
     showSpinner(false);
   }
 }
@@ -2033,7 +2130,16 @@ async function downloadTextZipped(text, filename) {
 function exportImage() {
   closeExportMenu();
   if (!structureLoaded) return;
-  triggerDownload(viewer.pngURI(), exportBaseName() + '.png');
+  const filename = exportBaseName() + '.png';
+  if (!isAf3Loaded()) { triggerDownload(viewer.pngURI(), filename); return; }
+  const img = new Image();
+  img.onload = () => {
+    const captioned = af3CaptionedCanvas(img.naturalWidth, img.naturalHeight);
+    captioned.ctx.drawImage(img, 0, 0);
+    triggerDownload(captioned.canvas.toDataURL('image/png'), filename);
+  };
+  img.onerror = () => setStatus('Image export failed', 'error');
+  img.src = viewer.pngURI();
 }
 
 // Chrome's File System Access API writes straight to a user-picked file via
@@ -2134,9 +2240,23 @@ async function exportVideo() {
 
   const wasSpinning = spinning;
   if (!wasSpinning) { viewer.spin('y'); }
+  let captionFrame = null;
 
   try {
-    const stream = canvas.captureStream(30);
+    // AlphaFold 3 videos are recorded from a copy of the canvas with the caption
+    // band under it, because the WebGL canvas itself can't be drawn on.
+    let source = canvas;
+    if (isAf3Loaded()) {
+      const captioned = af3CaptionedCanvas(canvas.width, canvas.height);
+      source = captioned.canvas;
+      const paint = () => {
+        captioned.ctx.drawImage(canvas, 0, 0);
+        captionFrame = requestAnimationFrame(paint);
+      };
+      paint();
+    }
+
+    const stream = source.captureStream(30);
     const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
       .find(t => MediaRecorder.isTypeSupported(t)) || '';
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -2151,6 +2271,7 @@ async function exportVideo() {
 
     downloadBlob(new Blob(chunks, { type: 'video/webm' }), exportBaseName() + '.webm');
   } finally {
+    if (captionFrame !== null) cancelAnimationFrame(captionFrame);
     if (!wasSpinning) viewer.spin(false);
     videoRecording = false;
     btn.textContent = prevLabel;
@@ -2737,6 +2858,8 @@ function renderScorePanel() {
        <div>★ best value in the row</div>
        <div>— not computed for that method</div>
        <div>MSA depth cells are shaded relative to the other methods in the same row.</div>
+       <div>AlphaFold 3 values are for non-commercial use only.
+            <button class="link-btn" onclick="openTerms()">Terms and details</button></div>
        <div>LIS and ipSAE are the larger of their two directions; MSA depth is the
             non-gap depth where the method reports one, otherwise the unpaired depth.
             ${scoreScope === 'extended'
@@ -2765,7 +2888,7 @@ function copyScoreTsv() {
       return v === undefined ? 'NA' : v;
     })].join('\t'));
   }
-  copyText(lines.join('\n'), () => {
+  copyText(af3TableNotice(methods) + lines.join('\n'), () => {
     const b = document.getElementById('score-copy-btn');
     b.textContent = 'Copied';
     setTimeout(() => { b.textContent = 'Copy as TSV'; }, 1400);
@@ -2793,7 +2916,7 @@ function downloadScoreCsv() {
       }),
     ]);
   }
-  const csv = rows.map(r => r.map(csvCell).join(',')).join('\n');
+  const csv = af3TableNotice(methods) + rows.map(r => r.map(csvCell).join(',')).join('\n');
   downloadBlob(new Blob([csv], { type: 'text/csv' }),
                sanitizeFilename(`${selectedEntry.identifier}_scores`) + '.csv');
 }
@@ -2894,6 +3017,83 @@ function closeHelp() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
 document.getElementById('help-overlay').addEventListener('click', e => {
   if (e.target.id === 'help-overlay') closeHelp();
+});
+
+// ── AlphaFold 3 terms of use (issue #27) ──────────────────────────────────────
+// The notice wording comes from section 5 of the AlphaFold 3 Output Terms of Use.
+// A .cif export already carries the notice in its header, but images, videos and
+// score tables would lose it without the additions below.
+const AF3_TERMS_URL = 'https://github.com/google-deepmind/alphafold3/blob/main/OUTPUT_TERMS_OF_USE.md';
+const AF3_NOTICE = `By using this information, you agree to AlphaFold 3 Output Terms of Use found at ${AF3_TERMS_URL}.`;
+const AF3_CAPTION = 'AlphaFold 3 prediction (Abramson et al., Nature 2024). Non-commercial use only. '
+  + `By using this information, you agree to AlphaFold 3 Output Terms of Use found at ${AF3_TERMS_URL}.`;
+
+function isAf3Loaded() {
+  return !!loadedStructure && loadedStructure.method === 'af3';
+}
+
+function updateAf3Notice() {
+  document.getElementById('af3-notice').classList.toggle('visible', isAf3Loaded());
+}
+
+// A canvas with room for the frame plus a caption band underneath it, so the
+// caption never covers any of the structure. The band is painted once; the
+// caller draws the frame into the top width x height of the canvas.
+function af3CaptionedCanvas(width, height) {
+  const font = Math.max(11, Math.round(width / 90));
+  const lineHeight = Math.round(font * 1.4);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = `${font}px sans-serif`;
+
+  const lines = [];
+  let line = '';
+  for (const word of AF3_CAPTION.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > width - font * 2) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  lines.push(line);
+
+  // Video encoders reject odd frame heights.
+  const total = height + lineHeight * lines.length + font;
+  canvas.width = width;
+  canvas.height = total + (total % 2);
+
+  // Resizing a canvas resets its context, so the font has to be set again.
+  ctx.fillStyle = '#0f1117';
+  ctx.fillRect(0, height, width, canvas.height - height);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = `${font}px sans-serif`;
+  ctx.textBaseline = 'top';
+  lines.forEach((l, i) => ctx.fillText(l, font, height + font / 2 + i * lineHeight));
+  return { canvas, ctx };
+}
+
+// Score tables mix methods, so the notice goes in whenever AlphaFold 3 is one of them.
+function af3TableNotice(methods) {
+  if (!methods.includes('af3')) return '';
+  return [
+    '# AlphaFold 3 values below are for non-commercial use only. Cite Abramson et al., Nature (2024).',
+    `# ${AF3_NOTICE}`,
+  ].join('\n') + '\n';
+}
+
+function openTerms() {
+  document.getElementById('terms-overlay').classList.add('open');
+}
+
+function closeTerms() {
+  document.getElementById('terms-overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTerms(); });
+document.getElementById('terms-overlay').addEventListener('click', e => {
+  if (e.target.id === 'terms-overlay') closeTerms();
 });
 
 // ── Auto-login if token in session ────────────────────────────────────────────
