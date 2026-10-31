@@ -348,8 +348,12 @@ function resolveDiskId(id) {
 // every method that produces several, and the viewer no longer lets the user
 // pick between them. AF3/AFM/Chai each wrote five samples to disk; the rest
 // are left on disk but never served.
+//
+// AF3's sample numbers are generation order, not a ranking, so seed-1_sample-0
+// is usually not its best model (issue #28). AF3 writes the top-ranked sample
+// to <id>_model.cif, which is also the model the TSV's AF3 scores describe.
 function resolveAf3(id) {
-  const f = path.join(METHOD_DIRS.af3, id, 'seed-1_sample-0', `${id}_seed-1_sample-0_model.cif`);
+  const f = path.join(METHOD_DIRS.af3, id, `${id}_model.cif`);
   return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 

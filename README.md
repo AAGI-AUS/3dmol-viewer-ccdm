@@ -21,7 +21,7 @@ A web-based protein structure viewer for effector–host interaction predictions
 
 | Key | Label | Models served | Notes |
 |---|---|---|---|
-| `af3` | AlphaFold3 | up to 5 (`seed-1_sample-0` … `sample-4`) | one directory per pair |
+| `af3` | AlphaFold3 | 1 (top-level `PairName_model.cif`) | the top-ranked of five samples; sample numbers are not a ranking |
 | `afm` | AlphaFold-Multimer | up to 5 (`ranked_0.pdb` … `ranked_4.pdb`) | only the official `ranked_*` files are served — see rule below |
 | `boltz2` | Boltz-2 | 1 (`model_0`) | this pipeline only emits a single model per pair |
 | `chai` | Chai-1 | up to 5 (`pred.model_idx_0.cif` … `idx_4.cif`) | |
@@ -42,6 +42,7 @@ INPUT_DATA_DIR/
 ├── metadata_curated_positive.tsv
 ├── curated_positive_af3_results/
 │   └── PairName/
+│       ├── PairName_model.cif             # top-ranked sample, the one served
 │       └── seed-1_sample-N/
 │           └── PairName_seed-1_sample-N_model.cif
 ├── curated_positive_afm_results/

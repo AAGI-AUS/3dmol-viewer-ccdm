@@ -84,7 +84,7 @@ selected-residues side panel.
 
 | Method | Directory | Path pattern | Models |
 |---|---|---|---|
-| AF3 | `curated_positive_af3_results/` | `<id>/seed-1_sample-<n>/<id>_seed-1_sample-<n>_model.cif` | up to 5 |
+| AF3 | `curated_positive_af3_results/` | `<id>/<id>_model.cif` (top-ranked sample) | 1 |
 | AFM | `curated_positive_afm_results/` | `<id>/<id>/ranked_<n>.pdb` | up to 5 |
 | Boltz-2 | `curated_positive_boltz2_results/` | `<id>.yaml/boltz_results_<id>/predictions/<id>/<id>_model_0.cif` | 1 |
 | Chai-1 | `curated_positive_chai_results/models/` | `<id>/pred.model_idx_<n>.cif` | up to 5 |
@@ -227,7 +227,7 @@ and returning an array of `{ model: <int 0-4>, file: <absolute path>, format:
 
 | Method key | Label | Directory under `INPUT_DATA_DIR` | Path pattern per model | Format |
 |---|---|---|---|---|
-| `af3` | AlphaFold3 | `curated_positive_af3_results/` | `<id>/seed-1_sample-<n>/<id>_seed-1_sample-<n>_model.cif` for n=0..4 | cif |
+| `af3` | AlphaFold3 | `curated_positive_af3_results/` | `<id>/<id>_model.cif` (top-ranked sample, index 0; `seed-1_sample-<n>` numbers are not a ranking) | cif |
 | `afm` | AlphaFold-Multimer | `curated_positive_afm_results/` | `<id>/<id>/ranked_<n>.pdb` for n=0..4 | pdb |
 | `boltz2` | Boltz-2 | `curated_positive_boltz2_results/` | `<id>.yaml/boltz_results_<id>/predictions/<id>/<id>_model_0.cif` (single model only, index 0) | cif |
 | `chai` | Chai-1 | `curated_positive_chai_results/models/` | `<id>/pred.model_idx_<n>.cif` for n=0..4 | cif |
