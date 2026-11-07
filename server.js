@@ -344,10 +344,11 @@ function resolveDiskId(id) {
   return ID_ALIASES[id] || id;
 }
 
-// Only model 0 is exposed (issue #21): it is the best-ranked prediction for
-// every method that produces several, and the viewer no longer lets the user
-// pick between them. AF3/AFM/Chai each wrote five samples to disk; the rest
-// are left on disk but never served.
+// Only one model per method is exposed (issue #21), always as model 0: the
+// best-ranked prediction, and the viewer no longer lets the user pick between
+// them. AF3/AFM/Chai each wrote five samples to disk; the rest are left on
+// disk but never served. AFM's ranked_0 is ranked by AFM itself; AF3 and Chai
+// number their samples in generation order, so they are ranked below.
 //
 // AF3's sample numbers are generation order, not a ranking, so seed-1_sample-0
 // is usually not its best model (issue #28). AF3 writes the top-ranked sample
@@ -370,9 +371,69 @@ function resolveBoltz2(id) {
   return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 
+// Read one scalar array from a NumPy .npz file (a zip of .npy files) without
+// a zip library. np.savez writes uncompressed (stored) members; deflated ones
+// are inflated. Returns null if the member is missing or has an unknown dtype.
+function readNpzScalar(file, member) {
+  const buf = fs.readFileSync(file);
+  let p = 0;
+  while (p + 30 <= buf.length && buf.readUInt32LE(p) === 0x04034b50) {
+    const method = buf.readUInt16LE(p + 8);
+    const compSize = buf.readUInt32LE(p + 18);
+    const nameLen = buf.readUInt16LE(p + 26);
+    const extraLen = buf.readUInt16LE(p + 28);
+    const name = buf.toString('utf8', p + 30, p + 30 + nameLen);
+    const start = p + 30 + nameLen + extraLen;
+    if (name === member) {
+      let npy = buf.subarray(start);
+      if (method === 8) npy = require('zlib').inflateRawSync(npy);
+      else if (method !== 0) return null;
+      // .npy: magic(6) version(2) header_len(2 for v1, 4 for v2+) header data
+      const major = npy[6];
+      const hlen = major === 1 ? npy.readUInt16LE(8) : npy.readUInt32LE(8);
+      const off = (major === 1 ? 10 : 12) + hlen;
+      const header = npy.toString('latin1', major === 1 ? 10 : 12, off);
+      if (header.includes("'<f4'")) return npy.readFloatLE(off);
+      if (header.includes("'<f8'")) return npy.readDoubleLE(off);
+      return null;
+    }
+    // compSize is 0xFFFFFFFF for zip64 members; stop rather than mis-seek.
+    if (compSize === 0xffffffff) return null;
+    p = start + compSize;
+  }
+  return null;
+}
+
+// Chai-1's model_idx numbers are sampling order, not a ranking, so
+// pred.model_idx_0 is usually not its best model (issue #28). Serve the model
+// with the highest aggregate_score, which is also the model the TSV's Chai
+// scores describe. Score files never change while the server runs, so the
+// choice is cached per pair.
+const chaiBestIdx = new Map();
+function chaiBestModelIndex(dir) {
+  if (chaiBestIdx.has(dir)) return chaiBestIdx.get(dir);
+  let best = null;
+  for (let n = 0; n <= 4; n++) {
+    const scores = path.join(dir, `scores.model_idx_${n}.npz`);
+    if (!fs.existsSync(scores)) continue;
+    let score = null;
+    try { score = readNpzScalar(scores, 'aggregate_score.npy'); } catch (e) { /* unreadable */ }
+    if (score === null) {
+      console.warn(`[chai] could not read aggregate_score from ${scores}`);
+      continue;
+    }
+    if (best === null || score > best.score) best = { n, score };
+  }
+  const idx = best ? best.n : 0;
+  chaiBestIdx.set(dir, idx);
+  return idx;
+}
+
 function resolveChai(id) {
   const diskId = resolveDiskId(id);
-  const f = path.join(METHOD_DIRS.chai, 'models', diskId, 'pred.model_idx_0.cif');
+  const dir = path.join(METHOD_DIRS.chai, 'models', diskId);
+  if (!fs.existsSync(dir)) return [];
+  const f = path.join(dir, `pred.model_idx_${chaiBestModelIndex(dir)}.cif`);
   return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 

@@ -87,7 +87,7 @@ selected-residues side panel.
 | AF3 | `curated_positive_af3_results/` | `<id>/<id>_model.cif` (top-ranked sample) | 1 |
 | AFM | `curated_positive_afm_results/` | `<id>/<id>/ranked_<n>.pdb` | up to 5 |
 | Boltz-2 | `curated_positive_boltz2_results/` | `<id>.yaml/boltz_results_<id>/predictions/<id>/<id>_model_0.cif` | 1 |
-| Chai-1 | `curated_positive_chai_results/models/` | `<id>/pred.model_idx_<n>.cif` | up to 5 |
+| Chai-1 | `curated_positive_chai_results/models/` | `<id>/pred.model_idx_<n>.cif` (highest `aggregate_score`) | 1 |
 | ESMFold2 | `curated_positive_esmfold2_results/` | `<id>/<id>_structure.cif` | 1 |
 
 ### Rule 1 — AFM only serves genuine `ranked_*.pdb` files, never unrelaxed
@@ -230,7 +230,7 @@ and returning an array of `{ model: <int 0-4>, file: <absolute path>, format:
 | `af3` | AlphaFold3 | `curated_positive_af3_results/` | `<id>/<id>_model.cif` (top-ranked sample, index 0; `seed-1_sample-<n>` numbers are not a ranking) | cif |
 | `afm` | AlphaFold-Multimer | `curated_positive_afm_results/` | `<id>/<id>/ranked_<n>.pdb` for n=0..4 | pdb |
 | `boltz2` | Boltz-2 | `curated_positive_boltz2_results/` | `<id>.yaml/boltz_results_<id>/predictions/<id>/<id>_model_0.cif` (single model only, index 0) | cif |
-| `chai` | Chai-1 | `curated_positive_chai_results/models/` | `<id>/pred.model_idx_<n>.cif` for n=0..4 | cif |
+| `chai` | Chai-1 | `curated_positive_chai_results/models/` | `<id>/pred.model_idx_<n>.cif` for the n whose `scores.model_idx_<n>.npz` has the highest `aggregate_score` (served as index 0; idx numbers are sampling order, not a ranking) | cif |
 | `esmfold2` | ESMFold2 | `curated_positive_esmfold2_results/` | `<id>/<id>_structure.cif` (single model only, index 0) | cif |
 
 **Critical rule — AFM must NOT fall back to unrelaxed structures.** In this
