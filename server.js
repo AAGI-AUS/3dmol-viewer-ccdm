@@ -58,7 +58,160 @@ const METADATA_COLUMNS = {
   'Host protein description': 'hostProteinDescription',
   'Effector-host interaction': 'effectorHostInteraction',
   'Mechanism': 'mechanism',
+  'Effector sequence': 'effectorSeq',
+  'Plant protein/domain sequence': 'targetSeq',
 };
+
+// ── Prediction quality scores ────────────────────────────────────────────────
+// Chain A is the effector and chain B is the target (see issue #8), so the raw
+// *_A / *_B columns are re-labelled in terms of those roles for the UI. Metrics
+// are grouped so the comparison table reads top-down from "how good is the whole
+// complex" to "how good is each chain".
+const SCORE_GROUPS = [
+  { key: 'global',    label: 'Global confidence' },
+  { key: 'interface', label: 'Interface quality' },
+  { key: 'chains',    label: 'Per-chain & MSA depth' },
+];
+
+const SCORE_METRICS = [
+  { key: 'pTM',                   group: 'global',    label: 'pTM',                scale: 'unit',  better: 'high', desc: 'Predicted TM-score of the whole complex' },
+  { key: 'ipTM',                  group: 'global',    label: 'ipTM',               scale: 'unit',  better: 'high', desc: 'Interface predicted TM-score' },
+  { key: 'composite',             group: 'global',    label: '0.8·ipTM + 0.2·pTM', scale: 'unit',  better: 'high', desc: 'AlphaFold ranking score — the usual headline number' },
+  { key: 'pdockq',                group: 'interface', label: 'pDockQ',             scale: 'unit',  better: 'high', desc: 'Predicted DockQ score for the interface' },
+  { key: 'pdockq2_A',             group: 'interface', label: 'pDockQ2',            sub: 'effector (A)',      scale: 'unit',  better: 'high', desc: 'pDockQ2 computed on chain A, the effector' },
+  { key: 'pdockq2_B',             group: 'interface', label: 'pDockQ2',            sub: 'target (B)',        scale: 'unit',  better: 'high', desc: 'pDockQ2 computed on chain B, the target' },
+  { key: 'LIS',                   group: 'interface', label: 'LIS',                sub: 'best direction',    scale: 'unit',  better: 'high', desc: 'Local interaction score — the larger of the two directions (effector→target, target→effector)' },
+  { key: 'LIS_pep_rec',           group: 'interface', label: 'LIS pep→rec',        sub: 'effector → target', scale: 'unit',  better: 'high', detail: true, desc: 'Local interaction score, effector onto target' },
+  { key: 'LIS_rec_pep',           group: 'interface', label: 'LIS rec→pep',        sub: 'target → effector', scale: 'unit',  better: 'high', detail: true, desc: 'Local interaction score, target onto effector' },
+  { key: 'ipSAE',                 group: 'interface', label: 'ipSAE',              sub: 'best direction',    scale: 'unit',  better: 'high', desc: 'Interface pairwise score — the larger of the two directions (A→B, B→A)' },
+  { key: 'ipSAE_A_B',             group: 'interface', label: 'ipSAE A→B',          sub: 'effector → target', scale: 'unit',  better: 'high', detail: true, desc: 'Interface pairwise score, effector onto target' },
+  { key: 'ipSAE_B_A',             group: 'interface', label: 'ipSAE B→A',          sub: 'target → effector', scale: 'unit',  better: 'high', detail: true, desc: 'Interface pairwise score, target onto effector' },
+  { key: 'fraction_disorder',     group: 'chains',    label: 'Fraction disorder',  sub: 'lower is better', scale: 'unit',  better: 'low',  desc: 'Fraction of residues predicted disordered — lower is better' },
+  { key: 'effector_pTM',          group: 'chains',    label: 'Effector pTM',       sub: 'chain A',  scale: 'unit',  better: 'high' },
+  { key: 'msa_depth_effector',    group: 'chains',    label: 'MSA depth effector', sub: 'per method', scale: 'count', better: 'high', desc: 'Depth of the effector alignment: the non-gap depth where the method reports one, otherwise the unpaired depth' },
+  { key: 'effector_unpaired_msa', group: 'chains',    label: 'Effector MSA depth', sub: 'unpaired', scale: 'count', better: 'high', detail: true },
+  { key: 'effector_paired_msa',   group: 'chains',    label: 'Effector MSA depth', sub: 'paired',   scale: 'count', better: 'high', detail: true },
+  { key: 'effector_msa_nongap',   group: 'chains',    label: 'Effector MSA depth', sub: 'non-gap',  scale: 'count', better: 'high', detail: true },
+  { key: 'host_pTM',              group: 'chains',    label: 'Host pTM',           sub: 'chain B',  scale: 'unit',  better: 'high' },
+  { key: 'msa_depth_host',        group: 'chains',    label: 'MSA depth host',     sub: 'per method', scale: 'count', better: 'high', desc: 'Depth of the host alignment: the non-gap depth where the method reports one, otherwise the unpaired depth' },
+  { key: 'host_unpaired_msa',     group: 'chains',    label: 'Host MSA depth',     sub: 'unpaired', scale: 'count', better: 'high', detail: true },
+  { key: 'host_paired_msa',       group: 'chains',    label: 'Host MSA depth',     sub: 'paired',   scale: 'count', better: 'high', detail: true },
+  { key: 'host_msa_nongap',       group: 'chains',    label: 'Host MSA depth',     sub: 'non-gap',  scale: 'count', better: 'high', detail: true },
+];
+
+// Each method reports a different subset of the metrics above, under its own
+// column prefix. Anything absent here is simply not computed for that method,
+// and renders as "not available" rather than as a zero.
+const METHOD_SCORE_COLUMNS = {
+  af3: {
+    pTM: 'AF3_pTM', ipTM: 'AF3_ipTM', composite: 'AF3_0.8ipTM+0.2pTM',
+    pdockq: 'AF3_pdockq', pdockq2_A: 'AF3_pdockq2_A', pdockq2_B: 'AF3_pdockq2_B',
+    LIS_pep_rec: 'AF3_LIS_pep_rec', LIS_rec_pep: 'AF3_LIS_rec_pep',
+    ipSAE_A_B: 'AF3_ipSAE_A_B', ipSAE_B_A: 'AF3_ipSAE_B_A',
+    fraction_disorder: 'AF3_fraction_disorder',
+    effector_pTM: 'AF3_effector_pTM',
+    effector_unpaired_msa: 'AF3_effector_unpaired_msa_depth',
+    effector_paired_msa: 'AF3_effector_paired_msa_depth',
+    host_pTM: 'AF3_host_pTM',
+    host_unpaired_msa: 'AF3_host_unpaired_msa_depth',
+    host_paired_msa: 'AF3_host_paired_msa_depth',
+  },
+  afm: {
+    pTM: 'AFM_pTM', ipTM: 'AFM_ipTM', composite: 'AFM_0.8ipTM+0.2pTM',
+    pdockq: 'AFM_pdockq', pdockq2_A: 'AFM_pdockq2_A', pdockq2_B: 'AFM_pdockq2_B',
+    LIS_pep_rec: 'AFM_LIS_pep_rec', LIS_rec_pep: 'AFM_LIS_rec_pep',
+    ipSAE_A_B: 'AFM_ipSAE_A_B', ipSAE_B_A: 'AFM_ipSAE_B_A',
+    fraction_disorder: 'AFM_fraction_disorder',
+    effector_msa_nongap: 'AFM_Effector_msa_depth_nongap',
+    host_msa_nongap: 'AFM_Host_msa_depth_nongap',
+  },
+  boltz2: {
+    pTM: 'Boltz_pTM', ipTM: 'Boltz_ipTM', composite: 'Boltz_0.8ipTM+0.2pTM',
+    pdockq: 'Boltz_pdockq', pdockq2_A: 'Boltz_pdockq2_A', pdockq2_B: 'Boltz_pdockq2_B',
+    LIS_pep_rec: 'Boltz_LIS_pep_rec', LIS_rec_pep: 'Boltz_LIS_rec_pep',
+    ipSAE_A_B: 'Boltz_ipSAE_A_B', ipSAE_B_A: 'Boltz_ipSAE_B_A',
+    fraction_disorder: 'Boltz_fraction_disorder',
+    effector_pTM: 'Boltz_effector_pTM',
+    effector_msa_nongap: 'Boltz_Effector_msa_depth_nongap',
+    host_pTM: 'Boltz_host_pTM',
+    host_msa_nongap: 'Boltz_Host_msa_depth_nongap',
+  },
+  chai: {
+    pTM: 'Chai_pTM', ipTM: 'Chai_ipTM', composite: 'Chai_0.8ipTM+0.2pTM',
+    fraction_disorder: 'Chai_fraction_disorder',
+    effector_pTM: 'Chai_effector_pTM',
+    effector_msa_nongap: 'Chai_Effector_msa_depth_nongap',
+    host_pTM: 'Chai_host_pTM',
+    host_msa_nongap: 'Chai_Host_msa_depth_nongap',
+  },
+  esmfold2: {
+    pTM: 'esmfold2_pTM', ipTM: 'esmfold2_ipTM', composite: 'esmfold2_0.8ipTM+0.2pTM',
+    pdockq: 'esmfold2_pdockq', pdockq2_A: 'esmfold2_pdockq2_A', pdockq2_B: 'esmfold2_pdockq2_B',
+    LIS_pep_rec: 'esmfold2_LIS_pep_rec', LIS_rec_pep: 'esmfold2_LIS_rec_pep',
+    ipSAE_A_B: 'esmfold2_ipSAE_A_B', ipSAE_B_A: 'esmfold2_ipSAE_B_A',
+    fraction_disorder: 'esmfold2_fraction_disorder',
+  },
+};
+
+// A cell only counts as comparable if it parses as a finite number. Blanks and
+// "NA" mean the run failed or the metric was never computed, and issue #12 asks
+// for those to be dropped from the comparison rather than shown as a zero.
+function parseScore(raw) {
+  if (raw === undefined || raw === null) return null;
+  const s = String(raw).trim();
+  if (!s || /^(na|n\/a|nan|none|null|-|\.)$/i.test(s)) return null;
+  const v = Number(s);
+  return Number.isFinite(v) ? v : null;
+}
+
+function seqLength(seq) {
+  const clean = String(seq || '').replace(/\s/g, '');
+  return clean.length || null;
+}
+
+// LIS and ipSAE are each reported once per direction, and MSA depth under
+// whichever variant the method happens to record. The comparison table reads as
+// one line per quantity (issue #22), so each pair is collapsed here: the two
+// directions to their maximum, the depth variants to the one that is comparable
+// across methods — non-gap where it exists, unpaired otherwise, which is the
+// same measurement under another name. The raw columns stay in the payload and
+// are shown in the extended view.
+function maxDefined(...vals) {
+  const present = vals.filter(v => v !== undefined);
+  return present.length ? Math.max(...present) : undefined;
+}
+
+function firstDefined(...vals) {
+  return vals.find(v => v !== undefined);
+}
+
+function deriveCombinedScores(values) {
+  const derived = {
+    LIS: maxDefined(values.LIS_pep_rec, values.LIS_rec_pep),
+    ipSAE: maxDefined(values.ipSAE_A_B, values.ipSAE_B_A),
+    msa_depth_effector: firstDefined(values.effector_msa_nongap, values.effector_unpaired_msa),
+    msa_depth_host: firstDefined(values.host_msa_nongap, values.host_unpaired_msa),
+  };
+  for (const [key, v] of Object.entries(derived)) {
+    if (v !== undefined) values[key] = v;
+  }
+}
+
+function extractScores(cols, headerIndex) {
+  const scores = {};
+  for (const [method, mapping] of Object.entries(METHOD_SCORE_COLUMNS)) {
+    const values = {};
+    for (const [metric, column] of Object.entries(mapping)) {
+      const idx = headerIndex[column];
+      if (idx === undefined) continue;
+      const v = parseScore(cols[idx]);
+      if (v !== null) values[metric] = v;
+    }
+    deriveCombinedScores(values);
+    if (Object.keys(values).length) scores[method] = values;
+  }
+  return scores;
+}
 
 function loadMetadata() {
   const text = fs.readFileSync(METADATA_TSV, 'utf8');
@@ -66,7 +219,9 @@ function loadMetadata() {
   if (!lines.length) return [];
   const header = lines[0].split('\t');
   const colIndex = {};
+  const headerIndex = {};
   header.forEach((h, i) => {
+    headerIndex[h.trim()] = i;
     const key = METADATA_COLUMNS[h];
     if (key) colIndex[key] = i;
   });
@@ -75,6 +230,15 @@ function loadMetadata() {
     const cols = lines[i].split('\t');
     const row = {};
     for (const [key, idx] of Object.entries(colIndex)) row[key] = (cols[idx] || '').trim();
+    row.scores = extractScores(cols, headerIndex);
+    // Only the lengths are useful to the client (they identify which chain is
+    // which when a model's chain letters are not A/B), and shipping 147 full
+    // sequence pairs to the browser is pure weight — keep the counts, drop the
+    // sequences.
+    row.effectorSeqLen = seqLength(row.effectorSeq);
+    row.targetSeqLen = seqLength(row.targetSeq);
+    delete row.effectorSeq;
+    delete row.targetSeq;
     if (row.identifier) rows.push(row);
   }
   return rows;
@@ -129,6 +293,13 @@ app.get('/api/metadata/search', requireAuth, (req, res) => {
   res.json({ entries: rows });
 });
 
+// The per-entry numbers already ride along on the metadata rows (row.scores);
+// this endpoint just hands the frontend the labels, ordering and scale hints it
+// needs to lay the comparison out.
+app.get('/api/scores/metrics', requireAuth, (req, res) => {
+  res.json({ groups: SCORE_GROUPS, metrics: SCORE_METRICS, methodLabels: METHOD_LABELS });
+});
+
 app.get('/api/metadata/entry/:id', requireAuth, (req, res) => {
   const row = METADATA.find(r => r.identifier === req.params.id);
   if (!row) return res.status(404).json({ error: 'Entry not found' });
@@ -173,27 +344,24 @@ function resolveDiskId(id) {
   return ID_ALIASES[id] || id;
 }
 
+// Only one model per method is exposed (issue #21), always as model 0: the
+// best-ranked prediction, and the viewer no longer lets the user pick between
+// them. AF3/AFM/Chai each wrote five samples to disk; the rest are left on
+// disk but never served. AFM's ranked_0 is ranked by AFM itself; AF3 and Chai
+// number their samples in generation order, so they are ranked below.
+//
+// AF3's sample numbers are generation order, not a ranking, so seed-1_sample-0
+// is usually not its best model (issue #28). AF3 writes the top-ranked sample
+// to <id>_model.cif, which is also the model the TSV's AF3 scores describe.
 function resolveAf3(id) {
-  const dir = path.join(METHOD_DIRS.af3, id);
-  if (!fs.existsSync(dir)) return [];
-  const models = [];
-  for (let n = 0; n <= 4; n++) {
-    const f = path.join(dir, `seed-1_sample-${n}`, `${id}_seed-1_sample-${n}_model.cif`);
-    if (fs.existsSync(f)) models.push({ model: n, file: f, format: 'cif' });
-  }
-  return models;
+  const f = path.join(METHOD_DIRS.af3, id, `${id}_model.cif`);
+  return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 
 function resolveAfm(id) {
   const diskId = resolveDiskId(id);
-  const dir = path.join(METHOD_DIRS.afm, diskId, diskId);
-  if (!fs.existsSync(dir)) return [];
-  const models = [];
-  for (let n = 0; n <= 4; n++) {
-    const f = path.join(dir, `ranked_${n}.pdb`);
-    if (fs.existsSync(f)) models.push({ model: n, file: f, format: 'pdb' });
-  }
-  return models;
+  const f = path.join(METHOD_DIRS.afm, diskId, diskId, 'ranked_0.pdb');
+  return fs.existsSync(f) ? [{ model: 0, file: f, format: 'pdb' }] : [];
 }
 
 function resolveBoltz2(id) {
@@ -203,16 +371,70 @@ function resolveBoltz2(id) {
   return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 
+// Read one scalar array from a NumPy .npz file (a zip of .npy files) without
+// a zip library. np.savez writes uncompressed (stored) members; deflated ones
+// are inflated. Returns null if the member is missing or has an unknown dtype.
+function readNpzScalar(file, member) {
+  const buf = fs.readFileSync(file);
+  let p = 0;
+  while (p + 30 <= buf.length && buf.readUInt32LE(p) === 0x04034b50) {
+    const method = buf.readUInt16LE(p + 8);
+    const compSize = buf.readUInt32LE(p + 18);
+    const nameLen = buf.readUInt16LE(p + 26);
+    const extraLen = buf.readUInt16LE(p + 28);
+    const name = buf.toString('utf8', p + 30, p + 30 + nameLen);
+    const start = p + 30 + nameLen + extraLen;
+    if (name === member) {
+      let npy = buf.subarray(start);
+      if (method === 8) npy = require('zlib').inflateRawSync(npy);
+      else if (method !== 0) return null;
+      // .npy: magic(6) version(2) header_len(2 for v1, 4 for v2+) header data
+      const major = npy[6];
+      const hlen = major === 1 ? npy.readUInt16LE(8) : npy.readUInt32LE(8);
+      const off = (major === 1 ? 10 : 12) + hlen;
+      const header = npy.toString('latin1', major === 1 ? 10 : 12, off);
+      if (header.includes("'<f4'")) return npy.readFloatLE(off);
+      if (header.includes("'<f8'")) return npy.readDoubleLE(off);
+      return null;
+    }
+    // compSize is 0xFFFFFFFF for zip64 members; stop rather than mis-seek.
+    if (compSize === 0xffffffff) return null;
+    p = start + compSize;
+  }
+  return null;
+}
+
+// Chai-1's model_idx numbers are sampling order, not a ranking, so
+// pred.model_idx_0 is usually not its best model (issue #28). Serve the model
+// with the highest aggregate_score, which is also the model the TSV's Chai
+// scores describe. Score files never change while the server runs, so the
+// choice is cached per pair.
+const chaiBestIdx = new Map();
+function chaiBestModelIndex(dir) {
+  if (chaiBestIdx.has(dir)) return chaiBestIdx.get(dir);
+  let best = null;
+  for (let n = 0; n <= 4; n++) {
+    const scores = path.join(dir, `scores.model_idx_${n}.npz`);
+    if (!fs.existsSync(scores)) continue;
+    let score = null;
+    try { score = readNpzScalar(scores, 'aggregate_score.npy'); } catch (e) { /* unreadable */ }
+    if (score === null) {
+      console.warn(`[chai] could not read aggregate_score from ${scores}`);
+      continue;
+    }
+    if (best === null || score > best.score) best = { n, score };
+  }
+  const idx = best ? best.n : 0;
+  chaiBestIdx.set(dir, idx);
+  return idx;
+}
+
 function resolveChai(id) {
   const diskId = resolveDiskId(id);
   const dir = path.join(METHOD_DIRS.chai, 'models', diskId);
   if (!fs.existsSync(dir)) return [];
-  const models = [];
-  for (let n = 0; n <= 4; n++) {
-    const f = path.join(dir, `pred.model_idx_${n}.cif`);
-    if (fs.existsSync(f)) models.push({ model: n, file: f, format: 'cif' });
-  }
-  return models;
+  const f = path.join(dir, `pred.model_idx_${chaiBestModelIndex(dir)}.cif`);
+  return fs.existsSync(f) ? [{ model: 0, file: f, format: 'cif' }] : [];
 }
 
 function resolveEsmfold2(id) {

@@ -21,10 +21,10 @@ A web-based protein structure viewer for effector–host interaction predictions
 
 | Key | Label | Models served | Notes |
 |---|---|---|---|
-| `af3` | AlphaFold3 | up to 5 (`seed-1_sample-0` … `sample-4`) | one directory per pair |
+| `af3` | AlphaFold3 | 1 (top-level `PairName_model.cif`) | the top-ranked of five samples; sample numbers are not a ranking |
 | `afm` | AlphaFold-Multimer | up to 5 (`ranked_0.pdb` … `ranked_4.pdb`) | only the official `ranked_*` files are served — see rule below |
 | `boltz2` | Boltz-2 | 1 (`model_0`) | this pipeline only emits a single model per pair |
-| `chai` | Chai-1 | up to 5 (`pred.model_idx_0.cif` … `idx_4.cif`) | |
+| `chai` | Chai-1 | 1 (`pred.model_idx_<n>.cif`) | the model with the highest `aggregate_score` in `scores.model_idx_<n>.npz`; idx numbers are not a ranking |
 | `esmfold2` | ESMFold2 | 1 (`_structure.cif`) | single-model method |
 
 Each method has its own resolver function in `server.js` (`resolveAf3`, `resolveAfm`, `resolveBoltz2`, `resolveChai`, `resolveEsmfold2`), and `GET /api/methods/:id` reports which models are actually available for a given pair across all five.
@@ -42,6 +42,7 @@ INPUT_DATA_DIR/
 ├── metadata_curated_positive.tsv
 ├── curated_positive_af3_results/
 │   └── PairName/
+│       ├── PairName_model.cif             # top-ranked sample, the one served
 │       └── seed-1_sample-N/
 │           └── PairName_seed-1_sample-N_model.cif
 ├── curated_positive_afm_results/
@@ -240,6 +241,19 @@ sudo systemctl reload nginx
 - **Interim state:** inbound access is currently restricted at the network firewall to approved source addresses, and the deployment is not yet served over HTTPS (see [Server Architecture](#server-architecture)) — do not treat this as the final security posture
 - Once a hostname is assigned, enable HTTPS via Let's Encrypt/Certbot and relax the firewall rule accordingly
 - `.env` is in `.gitignore` — never commit credentials to the repository
+
+## AlphaFold 3 Output
+
+AlphaFold 3 predictions shown or exported by this viewer are for non-commercial use only and
+are subject to the [AlphaFold 3 Output Terms of Use](https://github.com/google-deepmind/alphafold3/blob/main/OUTPUT_TERMS_OF_USE.md).
+Cite Abramson, J. et al., *Nature* 630, 493–500 (2024). This project is not affiliated with or
+endorsed by Google, Google DeepMind or Isomorphic Labs, and it does not publish the AlphaFold 3
+model parameters.
+
+`public/legal/` holds a verbatim copy of the terms (`AF3_OUTPUT_TERMS_OF_USE.txt`) and the
+notice (`LEGALLY_BINDING_TERMS_OF_USE.txt`). The viewer's § panel lists the
+modifications made to the predictions and the prediction metadata. Update that panel if the
+served files or the AlphaFold 3 run configuration change.
 
 ## License 
 This project is licensed under the BSD 3-Clause License. See [LICENSE](LICENSE) for details.

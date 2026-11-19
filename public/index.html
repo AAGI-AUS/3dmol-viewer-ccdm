@@ -6,36 +6,167 @@
 <title>Protein-protein interaction viewer</title>
 <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
 <style>
+  /* ── Theme tokens ───────────────────────────────────────────────────────
+     Every colour in the app resolves through one of these, so flipping
+     data-theme on <html> repaints the whole interface — sidebar, panels,
+     overlays and the 3D canvas alike. Dark is the default; light is a warm
+     beige (#F5F5DC) scheme meant to be easy on the eyes and to give figure
+     exports a paper-like background.
+     Molecule colours (chain palettes, pLDDT scale) are deliberately NOT
+     tokenised — they carry scientific meaning and must not shift. */
+  :root {
+    --bg-app:        #0f1117;
+    --bg-panel:      #1a1f2e;
+    --bg-sunken:     #0f1117;
+    --bg-viewer:     #0a0d14;
+    --bg-elevated:   #131722;
+    --bg-seq:        #13171f;
+    --bg-tabs:       #161b28;
+    --bg-selbar:     #151a27;
+    --hover-bg:      #2d3748;
+    --chip-bg:       #2d3748;
+    --compare-bg:    #1e293b;
+    --neutral-btn:   #1f2937;
+    --scroll-thumb:  #2d3748;
+    --placeholder:   #2d3748;
+
+    --border:        #2d3748;
+    --border-strong: #374151;
+    --border-faint:  #1e2433;
+
+    --text-hi:       #ffffff;
+    --text:          #e2e8f0;
+    --text-soft:     #cbd5e1;
+    --text-muted:    #94a3b8;
+    --text-dim:      #64748b;
+    --text-faint:    #475569;
+    --text-na:       #3d4759;
+    --seq-res:       #4b5563;
+    --seq-num:       #374151;
+    --on-accent:     #ffffff;
+
+    --accent:        #3b82f6;
+    --accent-2:      #60a5fa;
+    --accent-3:      #93c5fd;
+    --accent-4:      #bfdbfe;
+    --accent-hover:  #2563eb;
+    --accent-bg:     #1e3a5f;
+    --accent-wash:   rgba(59, 130, 246, 0.12);
+    --indigo:        #6366f1;
+    --indigo-2:      #a5b4fc;
+    --indigo-bg:     #1e1b4b;
+
+    --danger:        #f87171;
+    --ok:            #22c55e;
+    --ok-2:          #4ade80;
+    --on-ok:         #05240f;
+    --warn:          #fbbf24;
+    --warn-border:   #a16207;
+
+    --glass:         rgba(22,27,46,.88);
+    --glass-2:       rgba(15,17,23,.88);
+    --glass-indigo:  rgba(30,27,75,.88);
+    --scrim:         rgba(5, 8, 14, .78);
+    --scrim-viewer:  rgba(10,13,20,.7);
+    --shadow:        rgba(0,0,0,.4);
+    --shadow-lg:     rgba(0,0,0,.55);
+    --track:         rgba(255,255,255,.10);
+    --label-hl-bg:   #FFD700;
+    --label-hl-fg:   #000000;
+    --seq-sel-ring:  #FF2D95;
+  }
+
+  :root[data-theme="light"] {
+    --bg-app:        #EFEEDB;
+    --bg-panel:      #F5F5DC;
+    --bg-sunken:     #FFFEF7;
+    --bg-viewer:     #F5F5DC;
+    --bg-elevated:   #FBFAEC;
+    --bg-seq:        #F0EFDA;
+    --bg-tabs:       #E9E7D0;
+    --bg-selbar:     #ECEAD5;
+    --hover-bg:      #E3E1C8;
+    --chip-bg:       #57564A;
+    --compare-bg:    #DCE7F8;
+    --neutral-btn:   #6B7280;
+    --scroll-thumb:  #CFCCB0;
+    --placeholder:   #BDBA9E;
+
+    --border:        #D5D2B4;
+    --border-strong: #C2BE9E;
+    --border-faint:  #E4E2CC;
+
+    --text-hi:       #1C1C12;
+    --text:          #2C2C1F;
+    --text-soft:     #3E3E2E;
+    --text-muted:    #5C5C46;
+    --text-dim:      #75755C;
+    --text-faint:    #8B8970;
+    --text-na:       #B3B096;
+    --seq-res:       #85836B;
+    --seq-num:       #A9A68C;
+    --on-accent:     #ffffff;
+
+    --accent:        #2563EB;
+    --accent-2:      #1D4ED8;
+    --accent-3:      #1E40AF;
+    --accent-4:      #1E3A8A;
+    --accent-hover:  #1E40AF;
+    --accent-bg:     #D9E4F9;
+    --accent-wash:   rgba(37, 99, 235, 0.10);
+    --indigo:        #4F46E5;
+    --indigo-2:      #4338CA;
+    --indigo-bg:     #E2E0FB;
+
+    --danger:        #DC2626;
+    --ok:            #15803D;
+    --ok-2:          #15803D;
+    --on-ok:         #FFFFFF;
+    --warn:          #B45309;
+    --warn-border:   #D97706;
+
+    --glass:         rgba(250,249,235,.92);
+    --glass-2:       rgba(250,249,235,.92);
+    --glass-indigo:  rgba(226,224,251,.95);
+    --scrim:         rgba(60,58,38,.45);
+    --scrim-viewer:  rgba(245,245,220,.72);
+    --shadow:        rgba(90,88,60,.20);
+    --shadow-lg:     rgba(90,88,60,.28);
+    --track:         rgba(0,0,0,.08);
+    --label-hl-bg:   #2C2C1F;
+    --label-hl-fg:   #F5F5DC;
+    --seq-sel-ring:  #D6006E;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-         background: #0f1117; color: #e2e8f0; height: 100vh; overflow: hidden; }
+         background: var(--bg-app); color: var(--text); height: 100vh; overflow: hidden; }
 
   /* ── Login ── */
   #login-screen {
     display: flex; align-items: center; justify-content: center;
-    height: 100vh; background: #0f1117;
+    height: 100vh; background: var(--bg-app);
   }
   .login-card {
-    background: #1a1f2e; border: 1px solid #2d3748; border-radius: 12px;
+    background: var(--bg-panel); border: 1px solid var(--border); border-radius: 12px;
     padding: 40px; width: 380px;
   }
-  .login-card h1 { font-size: 1.5rem; margin-bottom: 6px; color: #fff; }
-  .login-card p  { color: #64748b; font-size: 0.875rem; margin-bottom: 28px; }
-  .field label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 6px; letter-spacing: .05em; text-transform: uppercase; }
+  .login-card h1 { font-size: 1.5rem; margin-bottom: 6px; color: var(--text-hi); }
+  .login-card p  { color: var(--text-dim); font-size: 0.875rem; margin-bottom: 28px; }
+  .field label { display: block; font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; letter-spacing: .05em; text-transform: uppercase; }
   .field input {
-    width: 100%; padding: 10px 14px; background: #0f1117;
-    border: 1px solid #2d3748; border-radius: 8px; color: #e2e8f0;
+    width: 100%; padding: 10px 14px; background: var(--bg-sunken);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
     font-size: 0.95rem; outline: none; transition: border-color .2s;
   }
-  .field input:focus { border-color: #3b82f6; }
+  .field input:focus { border-color: var(--accent); }
   .field { margin-bottom: 16px; }
   .login-btn {
-    width: 100%; padding: 11px; background: #3b82f6; border: none;
-    border-radius: 8px; color: #fff; font-size: 1rem; font-weight: 600;
+    width: 100%; padding: 11px; background: var(--accent); border: none;
+    border-radius: 8px; color: var(--on-accent); font-size: 1rem; font-weight: 600;
     cursor: pointer; margin-top: 8px; transition: background .2s;
   }
-  .login-btn:hover { background: #2563eb; }
-  .error-msg { color: #f87171; font-size: 0.85rem; margin-top: 12px; text-align: center; min-height: 20px; }
+  .login-btn:hover { background: var(--accent-hover); }
+  .error-msg { color: var(--danger); font-size: 0.85rem; margin-top: 12px; text-align: center; min-height: 20px; }
 
   /* ── Main app ── */
   #app { display: none; height: 100vh; }
@@ -43,60 +174,62 @@
 
   /* Sidebar */
   .sidebar {
-    width: 320px; min-width: 280px; background: #1a1f2e;
-    border-right: 1px solid #2d3748; display: flex; flex-direction: column;
+    width: 320px; min-width: 280px; background: var(--bg-panel);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
     overflow: hidden;
   }
   .sidebar-header {
-    padding: 18px 20px 14px; border-bottom: 1px solid #2d3748;
+    padding: 18px 20px 14px; border-bottom: 1px solid var(--border);
     display: flex; align-items: center; justify-content: space-between;
   }
-  .sidebar-header h2 { font-size: 1rem; font-weight: 600; color: #fff; }
+  .sidebar-header h2 { font-size: 1rem; font-weight: 600; color: var(--text-hi); }
   .logout-btn {
-    background: none; border: 1px solid #2d3748; border-radius: 6px;
-    color: #64748b; font-size: 0.75rem; padding: 4px 10px; cursor: pointer;
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text-dim); font-size: 0.75rem; padding: 4px 10px; cursor: pointer;
   }
-  .logout-btn:hover { color: #f87171; border-color: #f87171; }
+  .logout-btn:hover { color: var(--danger); border-color: var(--danger); }
 
   .sidebar-body { flex: 1; overflow-y: auto; padding: 16px; }
 
   .section-label {
     font-size: 0.7rem; text-transform: uppercase; letter-spacing: .08em;
-    color: #475569; margin-bottom: 8px; font-weight: 600;
+    color: var(--text-faint); margin-bottom: 8px; font-weight: 600;
   }
 
   /* Search */
   .search-wrap { position: relative; margin-bottom: 12px; }
   .search-input {
-    width: 100%; padding: 9px 12px 9px 36px; background: #0f1117;
-    border: 1px solid #2d3748; border-radius: 8px; color: #e2e8f0;
+    width: 100%; padding: 9px 12px 9px 36px; background: var(--bg-sunken);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
     font-size: 0.9rem; outline: none;
   }
-  .search-input:focus { border-color: #3b82f6; }
+  .search-input:focus { border-color: var(--accent); }
   .search-icon {
     position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
-    color: #475569; pointer-events: none; font-size: 0.9rem;
+    color: var(--text-faint); pointer-events: none; font-size: 0.9rem;
   }
 
   /* Pair list */
   .pair-list { max-height: 220px; overflow-y: auto; margin-bottom: 18px; }
+  #pane-browse.active { display: flex; flex-direction: column; height: 100%; }
+  #pane-browse .pair-list { flex: 1; max-height: none; min-height: 120px; margin-bottom: 0; }
   .pair-item {
     padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
-    color: #94a3b8; transition: all .15s; white-space: nowrap; overflow: hidden;
+    color: var(--text-muted); transition: all .15s; white-space: nowrap; overflow: hidden;
     text-overflow: ellipsis;
   }
-  .pair-item:hover { background: #2d3748; color: #e2e8f0; }
-  .pair-item.selected { background: #1e3a5f; color: #60a5fa; font-weight: 600; }
-  .pair-empty { color: #475569; font-size: 0.85rem; padding: 8px 0; }
+  .pair-item:hover { background: var(--hover-bg); color: var(--text); }
+  .pair-item.selected { background: var(--accent-bg); color: var(--accent-2); font-weight: 600; }
+  .pair-empty { color: var(--text-faint); font-size: 0.85rem; padding: 8px 0; }
 
   /* Filter selects */
   .filter-section { margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
   .filter-select {
-    width: 100%; padding: 9px 12px; background: #0f1117;
-    border: 1px solid #2d3748; border-radius: 8px; color: #e2e8f0;
+    width: 100%; padding: 9px 12px; background: var(--bg-sunken);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
     font-size: 0.85rem; outline: none;
   }
-  .filter-select:focus { border-color: #3b82f6; }
+  .filter-select:focus { border-color: var(--accent); }
   .filter-select[multiple] {
     height: 96px; padding: 4px;
   }
@@ -104,82 +237,87 @@
     padding: 5px 8px; border-radius: 4px;
   }
   .filter-select[multiple] option:checked {
-    background: #1e3a5f; color: #60a5fa;
+    background: var(--accent-bg); color: var(--accent-2);
   }
   .filter-hint {
-    font-size: 0.7rem; color: #475569; margin-top: -4px;
+    font-size: 0.7rem; color: var(--text-faint); margin-top: -4px;
   }
   .clear-filters-btn {
-    align-self: flex-start; background: none; border: 1px solid #2d3748;
-    border-radius: 6px; color: #64748b; font-size: 0.75rem; padding: 4px 10px;
-    cursor: pointer; transition: all .15s;
+    width: 100%; background: transparent; border: 1.5px solid var(--accent);
+    border-radius: 8px; color: var(--accent-3); font-size: 0.9rem; font-weight: 600;
+    padding: 10px; cursor: pointer; transition: all .15s; margin-top: 2px;
   }
-  .clear-filters-btn:hover:not(:disabled) { color: #60a5fa; border-color: #3b82f6; }
-  .clear-filters-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .clear-filters-btn:hover:not(:disabled) { background: var(--accent-wash); color: var(--accent-4); border-color: var(--accent-2); }
+  .clear-filters-btn:disabled { opacity: 0.35; cursor: not-allowed; border-color: var(--border); color: var(--text-dim); }
 
   /* Metadata detail panel */
   .meta-panel {
-    background: #0f1117; border: 1px solid #2d3748; border-radius: 8px;
-    padding: 10px 12px; margin-bottom: 18px; font-size: 0.78rem; color: #94a3b8;
+    background: var(--bg-sunken); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 18px; font-size: 0.78rem; color: var(--text-muted);
     line-height: 1.5;
   }
   .meta-row { margin-bottom: 6px; }
   .meta-row:last-child { margin-bottom: 0; }
-  .meta-row b { color: #cbd5e1; }
-  .meta-title { font-size: 0.9rem; color: #fff; font-weight: 700; margin-bottom: 6px; }
+  .meta-row b { color: var(--text-soft); }
+  .meta-title { font-size: 0.9rem; color: var(--text-hi); font-weight: 700; margin-bottom: 6px; }
 
   /* Method selector */
   .method-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
   .method-btn {
-    flex: 1; min-width: 80px; padding: 8px 6px; background: #0f1117;
-    border: 1px solid #2d3748; border-radius: 6px; color: #64748b;
+    flex: 1; min-width: 80px; padding: 8px 6px; background: var(--bg-sunken);
+    border: 1px solid var(--border); border-radius: 6px; color: var(--text-dim);
     font-size: 0.78rem; font-weight: 600; cursor: pointer; text-align: center; transition: all .15s;
   }
-  .method-btn:hover:not(:disabled) { border-color: #3b82f6; color: #60a5fa; }
-  .method-btn.active { background: #1e3a5f; border-color: #3b82f6; color: #60a5fa; }
+  .method-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-2); }
+  .method-btn.active { background: var(--accent-bg); border-color: var(--accent); color: var(--accent-2); }
   .method-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-  /* Model selector */
-  .model-section { margin-bottom: 20px; }
-  .model-grid { display: flex; gap: 8px; flex-wrap: wrap; }
-  .model-btn {
-    flex: 1; min-width: 48px; padding: 8px 4px; background: #0f1117;
-    border: 1px solid #2d3748; border-radius: 6px; color: #64748b;
-    font-size: 0.85rem; cursor: pointer; text-align: center; transition: all .15s;
-  }
-  .model-btn:hover:not(:disabled) { border-color: #3b82f6; color: #60a5fa; }
-  .model-btn.active { background: #1e3a5f; border-color: #3b82f6; color: #60a5fa; font-weight: 700; }
-  .model-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
   /* Style selector */
   .style-row { display: flex; gap: 8px; margin-bottom: 18px; }
   .style-btn {
-    flex: 1; padding: 7px 4px; background: #0f1117;
-    border: 1px solid #2d3748; border-radius: 6px; color: #64748b;
+    flex: 1; padding: 7px 4px; background: var(--bg-sunken);
+    border: 1px solid var(--border); border-radius: 6px; color: var(--text-dim);
     font-size: 0.8rem; cursor: pointer; text-align: center; transition: all .15s;
   }
-  .style-btn:hover { border-color: #6366f1; color: #a5b4fc; }
-  .style-btn.active { background: #1e1b4b; border-color: #6366f1; color: #a5b4fc; font-weight: 700; }
+  .style-btn:hover { border-color: var(--indigo); color: var(--indigo-2); }
+  .style-btn.active { background: var(--indigo-bg); border-color: var(--indigo); color: var(--indigo-2); font-weight: 700; }
 
   /* Load button */
   .load-btn {
-    width: 100%; padding: 11px; background: #3b82f6; border: none;
-    border-radius: 8px; color: #fff; font-size: 0.95rem; font-weight: 600;
+    width: 100%; padding: 11px; background: var(--accent); border: none;
+    border-radius: 8px; color: var(--on-accent); font-size: 0.95rem; font-weight: 600;
     cursor: pointer; transition: background .2s;
   }
-  .load-btn:hover:not(:disabled) { background: #2563eb; }
-  .load-btn:disabled { background: #1e3a5f; color: #475569; cursor: not-allowed; }
+  .load-btn:hover:not(:disabled) { background: var(--accent-hover); }
+  .load-btn:disabled { background: var(--accent-bg); color: var(--text-faint); cursor: not-allowed; }
 
-  .status-msg { margin-top: 10px; font-size: 0.8rem; color: #64748b; text-align: center; min-height: 18px; }
-  .status-msg.error { color: #f87171; }
-  .status-msg.ok { color: #4ade80; }
+  .status-msg { margin-top: 10px; font-size: 0.8rem; color: var(--text-dim); text-align: center; min-height: 18px; }
+  .status-msg.error { color: var(--danger); }
+  .status-msg.ok { color: var(--ok-2); }
 
   /* Viewer */
-  .viewer-wrap { flex: 1; position: relative; background: #0a0d14; }
+  .viewer-wrap { flex: 1; position: relative; background: var(--bg-viewer); }
   #viewer { width: 100%; height: 100%; }
+
+  /* Background (dark/light) toggle, pinned top-right inside the viewer */
+  .bg-toggle {
+    position: absolute; top: 14px; right: 14px; z-index: 6;
+    display: flex; gap: 2px; padding: 3px;
+    background: var(--glass); border: 1px solid var(--border-strong);
+    border-radius: 8px; backdrop-filter: blur(4px);
+  }
+  .bg-toggle button {
+    display: flex; align-items: center; gap: 5px;
+    padding: 5px 10px; border: none; border-radius: 6px;
+    background: none; color: var(--text-muted); font-size: .74rem; font-weight: 600;
+    cursor: pointer; transition: all .15s; user-select: none;
+  }
+  .bg-toggle button:hover:not(.active) { color: var(--text); }
+  .bg-toggle button.active { background: var(--accent-bg); color: var(--accent-3); }
   .viewer-placeholder {
     position: absolute; inset: 0; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; color: #2d3748;
+    align-items: center; justify-content: center; color: var(--placeholder);
     pointer-events: none;
   }
   .viewer-placeholder svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: .4; }
@@ -190,38 +328,84 @@
 
   /* Sequence panel */
   #sequence-panel {
-    display: none; height: 190px; background: #13171f;
-    border-top: 1px solid #2d3748; flex-direction: column;
+    display: none; height: 190px; background: var(--bg-seq);
+    border-top: 1px solid var(--border); flex-direction: column;
   }
   #sequence-panel.visible { display: flex; }
   .seq-panel-header {
-    padding: 7px 14px; border-bottom: 1px solid #2d3748;
+    padding: 7px 14px; border-bottom: 1px solid var(--border);
     display: flex; align-items: center; justify-content: space-between;
     flex-shrink: 0;
   }
   .seq-panel-header span {
     font-size: .68rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .08em; color: #475569;
+    letter-spacing: .08em; color: var(--text-faint);
   }
   .seq-panel-body { flex: 1; overflow-y: auto; padding: 10px 16px; }
   .seq-chain { margin-bottom: 14px; }
   .seq-chain-label {
     font-size: .7rem; font-weight: 700; letter-spacing: .06em;
     text-transform: uppercase; margin-bottom: 5px;
+    display: flex; align-items: center; gap: 8px;
   }
+  /* Sits on the chain's own heading so the copy always belongs to the
+     sequence printed underneath it — one button per chain is what makes the
+     effector and the target separately copyable. */
+  .seq-copy-btn {
+    background: none; border: 1px solid var(--border); border-radius: 5px;
+    color: var(--text-dim); font-size: .62rem; font-weight: 600; letter-spacing: .06em;
+    text-transform: uppercase; padding: 2px 7px; cursor: pointer;
+    flex-shrink: 0; transition: border-color .12s, color .12s;
+  }
+  .seq-copy-btn:hover { border-color: var(--text-faint); color: var(--text-soft); }
+  .seq-copy-btn.copied { border-color: var(--ok); color: var(--ok); }
   .seq-track { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0; line-height: 1; }
   .seq-res {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 15px; height: 20px; font-size: 11px; font-family: 'Courier New', monospace;
-    cursor: pointer; border-radius: 2px; color: #4b5563;
-    transition: background .1s, color .1s; position: relative;
+    width: 15px; height: 20px; font-size: 12px; font-weight: 700;
+    font-family: 'Courier New', monospace;
+    cursor: pointer; border-radius: 2px; color: var(--seq-res);
+    transition: background .1s, color .1s, box-shadow .1s; position: relative;
   }
-  .seq-res:hover { background: #2d3748; color: #e2e8f0; }
-  .seq-res.labeled { background: #FFD700; color: #000 !important; font-weight: 700; border-radius: 3px; }
+  /* Each residue carries its chain colour inline, and an inline style outranks
+     a class rule — so the hover feedback has to be marked important to win. */
+  .seq-res:hover { background: var(--hover-bg); color: var(--text) !important; }
+  .seq-res.labeled { background: var(--label-hl-bg); color: var(--label-hl-fg) !important; font-weight: 700; border-radius: 3px; }
   .seq-res.iface { border-bottom: 2px solid; }
+  /* pLDDT mode paints the confidence band straight onto the residue, so the
+     score reads in the sequence track the same way it does in the 3D view.
+     The band rides on a custom property instead of an inline background, which
+     leaves the hover and selection rules below able to win the cascade. */
+  .seq-res.plddt { background: var(--plddt-bg); color: var(--plddt-fg) !important; }
+  /* Hovering and selecting must not repaint the band — a residue that changed
+     colour on click would read as a change of score. Both mark themselves with
+     a ring drawn inside the cell instead: neutral for hover, and for selection
+     a magenta deliberately kept off the blue-to-orange pLDDT ramp so it cannot
+     be mistaken for a confidence band. */
+  .seq-res.plddt:hover {
+    background: var(--plddt-bg); color: var(--plddt-fg) !important;
+    box-shadow: inset 0 0 0 2px var(--text);
+  }
+  .seq-res.plddt.labeled {
+    background: var(--plddt-bg); color: var(--plddt-fg) !important;
+    box-shadow: inset 0 0 0 2px var(--seq-sel-ring), 0 0 0 1px var(--bg-seq);
+    border-radius: 3px; z-index: 1;
+  }
+  /* Compact restatement of the sidebar pLDDT key, so the bands can be read
+     without looking away from the sequences. */
+  .seq-plddt-legend { display: none; align-items: center; gap: 10px; flex-shrink: 0; }
+  .seq-plddt-legend.visible { display: flex; }
+  .seq-plddt-legend span {
+    font-size: .62rem; font-weight: 600; text-transform: none;
+    letter-spacing: 0; color: var(--text-dim); white-space: nowrap;
+  }
+  .seq-plddt-legend i {
+    display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+    margin-right: 4px; vertical-align: -1px;
+  }
   .seq-num {
     display: inline-flex; align-items: flex-end;
-    font-size: 9px; font-family: monospace; color: #374151;
+    font-size: 9px; font-family: monospace; color: var(--seq-num);
     width: 15px; height: 20px; justify-content: center;
     padding-bottom: 1px; pointer-events: none;
   }
@@ -232,39 +416,56 @@
     display: flex; flex-direction: column; gap: 6px; z-index: 5;
   }
   .ctrl-btn {
-    width: 36px; height: 36px; background: rgba(22,27,46,.88);
-    border: 1px solid #374151; border-radius: 8px; color: #94a3b8;
+    width: 36px; height: 36px; background: var(--glass);
+    border: 1px solid var(--border-strong); border-radius: 8px; color: var(--text-muted);
     font-size: 1.05rem; cursor: pointer; display: flex;
     align-items: center; justify-content: center;
     transition: all .15s; backdrop-filter: blur(4px);
     user-select: none;
   }
-  .ctrl-btn:hover  { border-color: #3b82f6; color: #60a5fa; }
-  .ctrl-btn.active { border-color: #6366f1; color: #a5b4fc; background: rgba(30,27,75,.88); }
+  .ctrl-btn:hover:not(:disabled)  { border-color: var(--accent); color: var(--accent-2); }
+  .ctrl-btn.active { border-color: var(--indigo); color: var(--indigo-2); background: var(--glass-indigo); }
+  .ctrl-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  .export-menu-wrap { position: relative; }
+  .export-menu {
+    display: none; flex-direction: column; gap: 2px;
+    position: absolute; bottom: 0; right: 44px;
+    background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px; min-width: 190px; box-shadow: 0 4px 16px var(--shadow);
+  }
+  .export-menu.visible { display: flex; }
+  .export-menu button {
+    background: none; border: none; color: var(--text-muted); text-align: left;
+    padding: 8px 10px; border-radius: 6px; font-size: .82rem; cursor: pointer;
+    transition: all .15s; white-space: nowrap;
+  }
+  .export-menu button:hover:not(:disabled) { background: var(--hover-bg); color: var(--text); }
+  .export-menu button:disabled { opacity: .35; cursor: not-allowed; }
 
   /* Atom info bar */
   .atom-info-bar {
     position: absolute; bottom: 16px; left: 16px;
-    background: rgba(15,17,23,.88); border: 1px solid #374151;
+    background: var(--glass-2); border: 1px solid var(--border-strong);
     border-radius: 8px; padding: 8px 14px; font-size: .82rem;
-    color: #94a3b8; backdrop-filter: blur(4px); z-index: 5;
+    color: var(--text-muted); backdrop-filter: blur(4px); z-index: 5;
     max-width: 300px; line-height: 1.5; display: none;
   }
-  .atom-info-bar b { color: #e2e8f0; }
+  .atom-info-bar b { color: var(--text); }
   .atom-info-bar .aa-code {
     font-size: 1rem; font-weight: 700; margin-right: 4px;
   }
 
   /* Spinner */
   .spinner {
-    position: absolute; inset: 0; background: rgba(10,13,20,.7);
+    position: absolute; inset: 0; background: var(--scrim-viewer);
     display: flex; align-items: center; justify-content: center;
     z-index: 10; display: none;
   }
   .spinner.active { display: flex; }
   .spin {
-    width: 40px; height: 40px; border: 3px solid #2d3748;
-    border-top-color: #3b82f6; border-radius: 50%; animation: spin .8s linear infinite;
+    width: 40px; height: 40px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -272,11 +473,11 @@
   .plddt-toggle-row { margin-bottom: 10px; }
   .plddt-toggle-label {
     display: flex; align-items: center; gap: 8px; font-size: 0.85rem;
-    color: #94a3b8; cursor: pointer; user-select: none;
+    color: var(--text-muted); cursor: pointer; user-select: none;
   }
   .plddt-toggle-label input { cursor: pointer; }
   .plddt-legend {
-    display: none; font-size: 0.72rem; color: #94a3b8;
+    display: none; font-size: 0.72rem; color: var(--text-muted);
     margin-bottom: 16px; line-height: 1.9; padding-left: 2px;
   }
   .plddt-legend.visible { display: block; }
@@ -288,35 +489,317 @@
 
   /* Color pickers */
   .color-section { margin-bottom: 18px; }
-  .color-row {
-    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
-  }
+  .color-row { margin-bottom: 12px; }
   .chain-tag {
-    font-size: .78rem; font-weight: 700; color: #fff;
-    background: #2d3748; border-radius: 4px; padding: 2px 7px;
-    width: 44px; text-align: center; flex-shrink: 0;
+    font-size: .78rem; font-weight: 700; color: var(--on-accent);
+    background: var(--chip-bg); border-radius: 4px; padding: 2px 7px;
+    min-width: 44px; text-align: center; flex-shrink: 0;
+  }
+  /* Chain A / B carry fixed biological roles — spell them out next to the tag */
+  .chain-head {
+    display: flex; align-items: center; gap: 7px; margin-bottom: 6px;
+    min-width: 0;
+  }
+  .chain-role {
+    font-size: .72rem; font-weight: 700; letter-spacing: .05em;
+    text-transform: uppercase; color: var(--text-soft); flex-shrink: 0;
+  }
+  .chain-protein {
+    font-size: .72rem; color: var(--text-dim); min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* Effector / target legend pinned inside the viewer */
+  .chain-legend {
+    position: absolute; top: 14px; left: 14px; z-index: 5;
+    display: none; flex-direction: column; gap: 6px;
+    background: var(--glass); border: 1px solid var(--border-strong);
+    border-radius: 8px; padding: 9px 12px; backdrop-filter: blur(4px);
+    max-width: 280px; pointer-events: none;
+  }
+  .chain-legend.visible { display: flex; }
+  .chain-legend-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: .76rem; color: var(--text-soft); min-width: 0;
+  }
+  .chain-legend-swatch {
+    width: 22px; height: 16px; border-radius: 3px; flex-shrink: 0;
+    font-size: .62rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chain-legend-role {
+    font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; font-size: .68rem; flex-shrink: 0;
+  }
+  .chain-legend-name {
+    color: var(--text-muted); min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .color-swatches { display: flex; gap: 10px; flex: 1; }
   .color-swatch {
     display: flex; flex-direction: column; align-items: center; gap: 3px;
-    font-size: .68rem; color: #64748b; cursor: pointer; flex: 1;
+    font-size: .68rem; color: var(--text-dim); cursor: pointer; flex: 1;
   }
   .color-swatch input[type="color"] {
-    width: 100%; height: 30px; border: 1px solid #2d3748; border-radius: 6px;
+    width: 100%; height: 30px; border: 1px solid var(--border); border-radius: 6px;
     background: none; cursor: pointer; padding: 2px 3px;
   }
-  .color-swatch input[type="color"]:hover { border-color: #6366f1; }
+  .color-swatch input[type="color"]:hover { border-color: var(--indigo); }
   .color-reset {
-    background: none; border: 1px solid #2d3748; border-radius: 6px;
-    color: #64748b; font-size: .72rem; padding: 4px 8px; cursor: pointer;
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text-dim); font-size: .72rem; padding: 4px 8px; cursor: pointer;
     width: 100%; margin-top: 4px;
   }
-  .color-reset:hover { border-color: #94a3b8; color: #e2e8f0; }
+  .color-reset:hover { border-color: var(--text-muted); color: var(--text); }
 
   /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 3px; }
+
+  /* ── Model quality: sidebar preview ── */
+  .quality-preview {
+    background: var(--bg-sunken); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px; margin-bottom: 8px;
+  }
+  .quality-empty { color: var(--text-faint); font-size: .78rem; padding: 4px 2px; }
+  .qp-row {
+    display: grid; grid-template-columns: 62px 1fr 38px; align-items: center;
+    gap: 8px; padding: 4px 4px; border-radius: 5px; cursor: pointer;
+  }
+  .qp-row:hover { background: var(--hover-bg); }
+  .qp-row.disabled { cursor: default; opacity: .45; }
+  .qp-row.disabled:hover { background: none; }
+  .qp-name { font-size: .72rem; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+  .qp-row.active .qp-name { color: var(--accent-2); }
+  .qp-track { height: 8px; background: var(--bg-panel); border-radius: 4px; overflow: hidden; }
+  .qp-fill  { height: 100%; border-radius: 4px; }
+  .qp-val   { font-size: .72rem; color: var(--text-soft); text-align: right; font-variant-numeric: tabular-nums; }
+  .qp-na    { font-size: .68rem; color: var(--text-faint); text-align: right; }
+  .qp-foot  { font-size: .66rem; color: var(--text-faint); margin-top: 6px; padding: 0 2px; line-height: 1.4; }
+  .compare-btn {
+    width: 100%; padding: 9px; background: var(--compare-bg); border: 1px solid var(--accent);
+    border-radius: 8px; color: var(--accent-3); font-size: .82rem; font-weight: 600;
+    cursor: pointer; margin-bottom: 18px; transition: background .15s;
+  }
+  .compare-btn:hover:not(:disabled) { background: var(--accent-bg); }
+  .compare-btn:disabled { border-color: var(--border); color: var(--text-faint); cursor: not-allowed; }
+  .method-btn .mb-score {
+    display: block; font-size: .66rem; font-weight: 500; margin-top: 2px;
+    font-variant-numeric: tabular-nums; opacity: .85;
+  }
+
+  /* ── Model quality: comparison overlay ── */
+  .score-overlay, .help-overlay {
+    display: none; position: fixed; inset: 0; z-index: 400;
+    background: var(--scrim); padding: 28px;
+    align-items: center; justify-content: center;
+  }
+  .score-overlay.open, .help-overlay.open { display: flex; }
+  .score-card {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
+    width: 100%; max-width: 1180px; max-height: 100%;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 24px 60px var(--shadow-lg);
+  }
+  .score-head {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; gap: 16px;
+  }
+  .score-head h3 { font-size: 1rem; color: var(--text-hi); font-weight: 700; margin-bottom: 3px; }
+  .score-head .sub { font-size: .76rem; color: var(--text-dim); line-height: 1.5; }
+  .score-head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .seg button {
+    background: var(--bg-sunken); border: none; color: var(--text-dim); font-size: .76rem;
+    padding: 6px 12px; cursor: pointer; font-weight: 600;
+  }
+  .seg button.active { background: var(--accent-bg); color: var(--accent-3); }
+  /* Rows a summary row was combined from — indented so the grouping reads */
+  .matrix tr.detail-row .metric-col { padding-left: 22px; font-weight: 500; opacity: .85; }
+  .ghost-btn {
+    background: var(--bg-sunken); border: 1px solid var(--border); border-radius: 7px;
+    color: var(--text-muted); font-size: .76rem; padding: 6px 12px; cursor: pointer; font-weight: 600;
+  }
+  .ghost-btn:hover { border-color: var(--accent); color: var(--accent-3); }
+  .score-close {
+    background: none; border: none; color: var(--text-dim); font-size: 1.4rem;
+    line-height: 1; cursor: pointer; padding: 0 2px;
+  }
+  .score-close:hover { color: var(--danger); }
+  .score-body { padding: 18px 20px 22px; overflow: auto; }
+
+  /* Headline cards */
+  .score-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .mcard {
+    flex: 1; min-width: 168px; background: var(--bg-sunken); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; position: relative;
+  }
+  .mcard.best { border-color: var(--ok); }
+  .mcard.empty { opacity: .45; }
+  .mcard-top { display: flex; align-items: center; gap: 10px; }
+  .mcard-name { font-size: .82rem; font-weight: 700; color: var(--text); }
+  .mcard-tag {
+    position: absolute; top: -9px; right: 10px; background: var(--ok); color: var(--on-ok);
+    font-size: .6rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 10px;
+  }
+  .ring { flex-shrink: 0; }
+  .mcard-headline { font-size: 1.1rem; font-weight: 700; color: var(--text-hi); font-variant-numeric: tabular-nums; }
+  .mcard-headline small { font-size: .62rem; color: var(--text-dim); font-weight: 600; display: block; text-transform: uppercase; letter-spacing: .06em; }
+  .mcard-mini { margin-top: 10px; display: flex; gap: 12px; }
+  .mcard-mini div { font-size: .7rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .mcard-mini b { color: var(--text); font-weight: 700; }
+  .mcard-note { margin-top: 9px; font-size: .66rem; color: var(--text-dim); }
+  .mcard-note.warn { color: var(--warn); }
+
+  /* Matrix */
+  .matrix-wrap { overflow-x: auto; }
+  table.matrix { border-collapse: separate; border-spacing: 0; width: 100%; font-size: .76rem; }
+  table.matrix th, table.matrix td { padding: 6px 8px; text-align: center; white-space: nowrap; }
+  table.matrix thead th {
+    position: sticky; top: 0; background: var(--bg-elevated); z-index: 2;
+    border-bottom: 1px solid var(--border); color: var(--text-soft); font-weight: 700; font-size: .76rem;
+  }
+  table.matrix thead th.metric-col { text-align: left; }
+  table.matrix th.metric-col, table.matrix td.metric-col { text-align: left; }
+  table.matrix th.method-head { cursor: pointer; }
+  table.matrix th.method-head:hover { color: var(--accent-2); }
+  table.matrix th.method-head.sel { color: var(--accent-2); }
+  table.matrix th.method-head small { display: block; font-weight: 500; font-size: .62rem; color: var(--text-dim); }
+  td.metric-col, th.metric-col {
+    color: var(--text-soft); font-weight: 600; white-space: nowrap; width: 1%;
+    position: sticky; left: 0; background: var(--bg-elevated); z-index: 1;
+    padding-right: 22px;
+  }
+  td.metric-col small { display: block; font-weight: 400; font-size: .66rem; color: var(--text-dim); }
+  tr.group-row td {
+    text-align: left; font-size: .66rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text-faint); font-weight: 700; padding-top: 14px; padding-bottom: 4px;
+    background: var(--bg-elevated);
+  }
+  td.cell { border-top: 1px solid var(--border-faint); }
+  .cell-box { border-radius: 5px; padding: 4px 6px; }
+  .cell-val { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+  .cell-bar { height: 3px; border-radius: 2px; margin-top: 3px; background: var(--track); }
+  .cell-bar > span { display: block; height: 100%; border-radius: 2px; }
+  .cell-best .cell-val::after { content: ' ★'; color: var(--warn); font-size: .7rem; }
+  .cell-na { color: var(--text-na); }
+
+  /* Plain table view */
+  table.matrix.plain .cell-box { background: none !important; padding: 4px 6px; }
+  table.matrix.plain .cell-bar { display: none; }
+  table.matrix.plain .cell-best .cell-val { color: var(--ok-2); }
+
+  .score-legend {
+    margin-top: 16px; display: flex; gap: 18px; flex-wrap: wrap;
+    font-size: .68rem; color: var(--text-dim); align-items: center;
+  }
+  .legend-scale { display: flex; align-items: center; gap: 6px; }
+  .legend-grad {
+    width: 110px; height: 8px; border-radius: 4px;
+    background: linear-gradient(90deg, hsl(0 65% 45%), hsl(45 75% 48%), hsl(130 60% 40%));
+  }
+
+  /* ── Sidebar tabs ── */
+  .sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-tabs); }
+  .sb-tab {
+    flex: 1; padding: 9px 2px; background: none; border: none; cursor: pointer;
+    color: var(--text-dim); font-size: .76rem; font-weight: 600;
+    border-bottom: 2px solid transparent; position: relative;
+    transition: color .15s, background .15s;
+  }
+  .sb-tab:hover { color: var(--text-muted); }
+  .sb-tab.active { color: var(--accent-2); border-bottom-color: var(--accent); background: var(--bg-panel); }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* The selected pair stays pinned above the panes, so every tab says which
+     interaction it is talking about without scrolling back to the list. */
+  .selected-bar { padding: 9px 16px; border-bottom: 1px solid var(--border); background: var(--bg-selbar); }
+  .sel-name { font-size: .82rem; font-weight: 700; color: var(--text-hi); }
+  .sel-sub  { font-size: .69rem; color: var(--text-dim); margin-top: 2px; }
+
+  .section-toggle {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    background: none; border: none; padding: 0 0 8px; cursor: pointer;
+    font-size: 0.7rem; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--text-faint); font-weight: 600;
+  }
+  .section-toggle:hover { color: var(--text-muted); }
+  .section-toggle .chev { transition: transform .15s; font-size: .8rem; }
+  .section-toggle[aria-expanded="false"] .chev { transform: rotate(-90deg); }
+  .filter-section.collapsed { display: none; }
+
+  .back-link {
+    background: none; border: none; color: var(--accent-2); cursor: pointer;
+    font-size: .75rem; padding: 0 0 12px; display: block;
+  }
+  .back-link:hover { color: var(--accent-3); }
+  .pane-hint { margin-top: 14px; font-size: .72rem; color: var(--text-faint); text-align: center; line-height: 1.6; }
+  .pane-hint button {
+    background: none; border: none; color: var(--accent-2); cursor: pointer;
+    font-size: .72rem; padding: 0; text-decoration: underline;
+  }
+  .pane-empty { color: var(--text-faint); font-size: .8rem; line-height: 1.6; }
+  .showing-bar {
+    font-size: .74rem; color: var(--text-dim); line-height: 1.5;
+    padding: 8px 10px; margin-bottom: 16px;
+    background: var(--bg-sunken); border: 1px solid var(--border); border-radius: 7px;
+  }
+  .showing-bar b { color: var(--text-soft); font-weight: 600; }
+  .showing-bar.stale { border-color: var(--warn-border); color: var(--warn); }
+  .sidebar-header-actions { display: flex; align-items: center; gap: 8px; }
+  .help-btn {
+    width: 24px; height: 24px; flex-shrink: 0; padding: 0;
+    background: none; border: 1px solid var(--border); border-radius: 50%;
+    color: var(--text-dim); font-size: .82rem; font-weight: 700; cursor: pointer;
+    line-height: 1; transition: color .15s, border-color .15s;
+  }
+  .help-btn:hover { color: var(--accent-2); border-color: var(--accent); }
+
+  .help-card {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
+    width: 100%; max-width: 560px; max-height: 100%; overflow: auto;
+    padding: 22px 24px 24px; box-shadow: 0 24px 60px var(--shadow-lg);
+  }
+  .help-card h3 { font-size: 1rem; color: var(--text-hi); font-weight: 700; margin-bottom: 4px; }
+  .help-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+  .help-card p { font-size: .84rem; color: var(--text-muted); line-height: 1.65; margin-bottom: 12px; }
+  .help-card ul { margin: 0 0 16px 18px; }
+  .help-card li { font-size: .84rem; color: var(--text-muted); line-height: 1.65; margin-bottom: 5px; }
+  .help-card a { color: var(--accent-2); }
+  .help-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .help-cta {
+    display: inline-block; background: var(--accent); color: var(--on-accent); text-decoration: none;
+    font-size: .88rem; font-weight: 600; padding: 10px 18px; border-radius: 8px;
+  }
+  .help-cta:hover { background: var(--accent-hover); }
+  .help-note { font-size: .74rem; color: var(--text-faint); margin-top: 14px; line-height: 1.6; }
+
+  /* ── AlphaFold 3 terms of use (issue #27) ── */
+  .login-terms { font-size: .72rem; color: var(--text-dim); line-height: 1.55; margin-top: 16px; }
+  .login-terms a { color: var(--accent-2); }
+  .af3-notice {
+    display: none; position: absolute; left: 12px; bottom: 12px; z-index: 20;
+    max-width: calc(100% - 90px); padding: 6px 10px; border-radius: 6px;
+    background: var(--bg-elevated); border: 1px solid var(--warn-border);
+    font-size: .72rem; color: var(--text-soft); line-height: 1.5;
+  }
+  .af3-notice.visible { display: block; }
+  .af3-notice b { color: var(--warn); }
+  .link-btn {
+    background: none; border: none; padding: 0; font: inherit;
+    color: var(--accent-2); text-decoration: underline; cursor: pointer;
+  }
+  .terms-card { max-width: 680px; }
+  .terms-card .help-actions { font-size: .8rem; }
+  .terms-card h4 { font-size: .84rem; color: var(--text-hi); font-weight: 700; margin: 16px 0 6px; }
+  .terms-card blockquote {
+    font-size: .8rem; color: var(--text-soft); line-height: 1.6; margin: 0 0 12px;
+    padding: 8px 12px; border-left: 3px solid var(--warn-border); background: var(--bg-panel);
+    overflow-wrap: anywhere;
+  }
 </style>
 </head>
 <body>
@@ -336,6 +819,10 @@
     </div>
     <button class="login-btn" onclick="login()">Sign In</button>
     <div class="error-msg" id="login-error"></div>
+    <div class="login-terms">
+      This viewer includes AlphaFold 3 predictions, which are for non-commercial use only and
+      are subject to the <a href="legal/AF3_OUTPUT_TERMS_OF_USE.txt" target="_blank" rel="noopener noreferrer">AlphaFold 3 Output Terms of Use</a>.
+    </div>
   </div>
 </div>
 
@@ -344,12 +831,33 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <h2>🧬 PPI Viewer</h2>
-      <button class="logout-btn" onclick="logout()">Logout</button>
+      <div class="sidebar-header-actions">
+        <button class="help-btn" onclick="openTerms()" title="AlphaFold 3 terms of use">§</button>
+        <button class="help-btn" onclick="openHelp()" title="Help &amp; feedback">?</button>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </div>
     </div>
-    <div class="sidebar-body">
 
-      <div class="section-label">Filter Interactions</div>
-      <div class="filter-section">
+    <div class="sidebar-tabs">
+      <button class="sb-tab active" id="tab-browse"  onclick="setSidebarTab('browse')">Browse</button>
+      <button class="sb-tab"        id="tab-model"   onclick="setSidebarTab('model')">Model</button>
+      <button class="sb-tab"        id="tab-display" onclick="setSidebarTab('display')">Display</button>
+      <button class="sb-tab"        id="tab-details" onclick="setSidebarTab('details')">Details</button>
+    </div>
+
+    <div class="selected-bar" id="selected-bar" style="display:none">
+      <div class="sel-name" id="sel-name"></div>
+      <div class="sel-sub"  id="sel-sub"></div>
+    </div>
+
+    <div class="sidebar-body">
+      <!-- ── Tab 1: find an interaction ── -->
+      <div class="tab-pane active" id="pane-browse">
+
+      <button class="section-toggle" id="filters-toggle" onclick="toggleFilters()" aria-expanded="true">
+        <span>Filter Interactions</span><span class="chev">&#9662;</span>
+      </button>
+      <div class="filter-section" id="filter-section">
         <select class="filter-select" id="filter-plant" multiple onchange="onFilterChange()"></select>
         <div class="filter-hint">Plant species — Ctrl/Cmd+click to select multiple, none = any</div>
         <select class="filter-select" id="filter-pathogen" multiple onchange="onFilterChange()"></select>
@@ -365,20 +873,36 @@
         <div class="pair-empty">Loading…</div>
       </div>
 
-      <div id="meta-panel" class="meta-panel" style="display:none"></div>
+      </div><!-- /pane-browse -->
+
+      <!-- ── Tab 2: choose a prediction and load it ── -->
+      <div class="tab-pane" id="pane-model">
+      <button class="back-link" onclick="setSidebarTab('browse')">&lsaquo; Change interaction</button>
+
+      <div class="section-label">Model Quality</div>
+      <div class="quality-preview" id="quality-preview">
+        <div class="quality-empty">Select an interaction to compare methods</div>
+      </div>
+      <button class="compare-btn" id="compare-btn" onclick="openScorePanel()" disabled>
+        📊 Compare all prediction scores
+      </button>
 
       <div class="section-label">Prediction Method</div>
       <div class="method-row" id="method-row">
-        <span style="color:#475569;font-size:.8rem">Select an interaction first</span>
+        <span style="color:var(--text-faint);font-size:.8rem">Select an interaction first</span>
       </div>
 
-      <div class="section-label">Model</div>
-      <div class="model-section">
-        <div class="model-grid" id="model-grid">
-          <!-- populated dynamically -->
-        </div>
+      <button class="load-btn" id="load-btn" onclick="loadStructure()" disabled>Load Structure</button>
+      <div class="status-msg" id="status"></div>
+      <div class="pane-hint">
+        Colours, pLDDT and interface tools live in the
+        <button onclick="setSidebarTab('display')">Display</button> tab.
       </div>
+      </div><!-- /pane-model -->
 
+      <!-- ── Tab 3: how the loaded structure is drawn ── -->
+      <div class="tab-pane" id="pane-display">
+      <div class="showing-bar" id="showing-bar">No structure loaded yet.</div>
       <div class="section-label">Display Style</div>
       <div class="style-row">
         <button class="style-btn active" onclick="setStyle('cartoon')" id="style-cartoon">Cartoon</button>
@@ -402,27 +926,35 @@
       <div class="section-label">Colors</div>
       <div class="color-section" id="color-section">
         <div class="color-row">
-          <span class="chain-tag">A</span>
+          <div class="chain-head">
+            <span class="chain-tag" id="chain-tag-A">A</span>
+            <span class="chain-role">Effector</span>
+            <span class="chain-protein" id="chain-protein-A"></span>
+          </div>
           <div class="color-swatches">
             <label class="color-swatch">
-              <input type="color" id="color-A-base"  value="#0072B2" oninput="onColorChange()">
+              <input type="color" id="color-A-base"  value="#3E9BDD" oninput="onColorChange()">
               <span>Structure</span>
             </label>
             <label class="color-swatch">
-              <input type="color" id="color-A-iface" value="#56B4E9" oninput="onColorChange()">
+              <input type="color" id="color-A-iface" value="#9BD4FF" oninput="onColorChange()">
               <span>Interface</span>
             </label>
           </div>
         </div>
         <div class="color-row">
-          <span class="chain-tag">B</span>
+          <div class="chain-head">
+            <span class="chain-tag" id="chain-tag-B">B</span>
+            <span class="chain-role">Target</span>
+            <span class="chain-protein" id="chain-protein-B"></span>
+          </div>
           <div class="color-swatches">
             <label class="color-swatch">
-              <input type="color" id="color-B-base"  value="#E69F00" oninput="onColorChange()">
+              <input type="color" id="color-B-base"  value="#E8703A" oninput="onColorChange()">
               <span>Structure</span>
             </label>
             <label class="color-swatch">
-              <input type="color" id="color-B-iface" value="#FFD700" oninput="onColorChange()">
+              <input type="color" id="color-B-iface" value="#FFB284" oninput="onColorChange()">
               <span>Interface</span>
             </label>
           </div>
@@ -430,25 +962,31 @@
         <button class="color-reset" onclick="resetColors()">Reset to defaults</button>
       </div>
 
-      <button class="load-btn" id="load-btn" onclick="loadStructure()" disabled>Load Structure</button>
-      <div class="status-msg" id="status"></div>
 
       <!-- Interface section — shown after a structure loads -->
       <div id="interface-section" style="display:none;margin-top:18px">
         <div class="section-label">Interface Residues</div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-          <label style="font-size:.8rem;color:#94a3b8;white-space:nowrap">Cutoff (Å)</label>
+          <label style="font-size:.8rem;color:var(--text-muted);white-space:nowrap">Cutoff (Å)</label>
           <input id="cutoff-input" type="number" value="10" min="2" max="30" step="0.5"
-            style="width:64px;padding:5px 8px;background:#0f1117;border:1px solid #2d3748;
-                   border-radius:6px;color:#e2e8f0;font-size:.85rem;outline:none">
+            style="width:64px;padding:5px 8px;background:var(--bg-sunken);border:1px solid var(--border);
+                   border-radius:6px;color:var(--text);font-size:.85rem;outline:none">
         </div>
-        <button class="load-btn" style="background:#6366f1;margin-bottom:8px" onclick="loadInterface()">
+        <button class="load-btn" style="background:var(--indigo);margin-bottom:8px" onclick="loadInterface()">
           Highlight Interface
         </button>
-        <button class="load-btn" style="background:#1f2937;font-size:.82rem;padding:7px" onclick="clearInterface()">
+        <button class="load-btn" style="background:var(--neutral-btn);font-size:.82rem;padding:7px" onclick="clearInterface()">
           Clear Highlight
         </button>
-        <div id="iface-status" style="font-size:.78rem;color:#64748b;margin-top:10px;line-height:1.7;white-space:pre-line"></div>
+        <div id="iface-status" style="font-size:.78rem;color:var(--text-dim);margin-top:10px;line-height:1.7;white-space:pre-line"></div>
+      </div>
+      </div><!-- /pane-display -->
+
+      <!-- ── Tab 4: the curated annotation for the selected interaction ── -->
+      <div class="tab-pane" id="pane-details">
+        <div class="section-label">Curated Annotation</div>
+        <div id="meta-panel" class="meta-panel" style="display:none"></div>
+        <div class="pane-empty" id="meta-empty">Select an interaction to see its curated annotation.</div>
       </div>
 
     </div>
@@ -457,6 +995,17 @@
   <div class="viewer-column">
   <div class="viewer-wrap">
     <div id="viewer"></div>
+    <div class="chain-legend" id="chain-legend"></div>
+
+    <!-- Light / dark theme toggle (top-right of the viewer) -->
+    <div class="bg-toggle" id="bg-toggle" role="group" aria-label="Colour theme">
+      <button type="button" id="bg-btn-dark"  class="active"
+              onclick="setViewerBackground('dark')"
+              title="Dark theme">&#9789; Dark</button>
+      <button type="button" id="bg-btn-light"
+              onclick="setViewerBackground('light')"
+              title="Light theme (beige)">&#9788; Light</button>
+    </div>
     <div class="viewer-placeholder" id="placeholder">
       <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="50" cy="50" r="30" stroke="currentColor" stroke-width="4"/>
@@ -467,9 +1016,16 @@
         <line x1="32" y1="58" x2="50" y2="28" stroke="currentColor" stroke-width="3"/>
         <line x1="32" y1="65" x2="68" y2="65" stroke="currentColor" stroke-width="3"/>
       </svg>
-      <p>Select a protein pair and model to view</p>
+      <p>Select a protein pair and prediction method to view</p>
     </div>
     <div class="spinner" id="spinner"><div class="spin"></div></div>
+
+    <!-- Shown while an AlphaFold 3 model is on screen (issue #27) -->
+    <div class="af3-notice" id="af3-notice">
+      <b>AlphaFold 3 prediction — non-commercial use only.</b>
+      Subject to the AlphaFold 3 Output Terms of Use. Cite Abramson et al., <i>Nature</i> (2024).
+      <button class="link-btn" onclick="openTerms()">Terms and details</button>
+    </div>
 
     <!-- Floating viewer controls (bottom-right) -->
     <div class="viewer-controls">
@@ -479,6 +1035,15 @@
       <button class="ctrl-btn" id="btn-spin" onclick="toggleSpin()" title="Toggle spin">↻</button>
       <button class="ctrl-btn" onclick="clearLabels()" title="Clear all labels">✕</button>
       <button class="ctrl-btn" id="btn-seq" onclick="toggleSequence()" title="Show/hide sequences">≡</button>
+      <div class="export-menu-wrap" id="export-menu-wrap">
+        <button class="ctrl-btn" id="btn-export" onclick="toggleExportMenu()" title="Export" disabled>⬇</button>
+        <div class="export-menu" id="export-menu">
+          <button onclick="exportImage()" disabled>📷 Image (PNG)</button>
+          <button onclick="exportStructureFile()" disabled>🧬 Structure file</button>
+          <button onclick="exportFasta()" disabled>📄 Sequences (FASTA)</button>
+          <button id="btn-export-video" onclick="exportVideo()" disabled>🎥 Video (WEBM)</button>
+        </div>
+      </div>
     </div>
 
     <!-- Last-clicked atom info (bottom-left) -->
@@ -490,15 +1055,21 @@
   <!-- Sequence panel (below viewer) -->
   <div id="sequence-panel">
     <div class="seq-panel-header">
-      <span>Protein Sequences</span>
+      <span id="seq-panel-title">Protein Sequences</span>
+      <div id="seq-plddt-legend" class="seq-plddt-legend" title="Per-residue pLDDT confidence">
+        <span><i style="background:#0053D6"></i>&gt; 90</span>
+        <span><i style="background:#65CBF3"></i>70&ndash;90</span>
+        <span><i style="background:#FFDB13"></i>50&ndash;70</span>
+        <span><i style="background:#FF7D45"></i>&lt; 50</span>
+      </div>
       <button onclick="toggleSequence()" style="
-        background:none; border:1px solid #2d3748; border-radius:5px;
-        color:#64748b; font-size:.7rem; padding:2px 8px; cursor:pointer;">
+        background:none; border:1px solid var(--border); border-radius:5px;
+        color:var(--text-dim); font-size:.7rem; padding:2px 8px; cursor:pointer;">
         Hide
       </button>
     </div>
     <div class="seq-panel-body" id="seq-panel-body">
-      <div style="color:#475569;font-style:italic;font-size:.82rem">
+      <div style="color:var(--text-faint);font-style:italic;font-size:.82rem">
         Load a structure to view sequences
       </div>
     </div>
@@ -507,26 +1078,145 @@
 
   <!-- Selected residues panel (right of viewer, shown when residues are selected) -->
   <div id="selection-panel" style="
-    width:220px; min-width:200px; background:#1a1f2e;
-    border-left:1px solid #2d3748; display:none; flex-direction:column;
+    width:220px; min-width:200px; background:var(--bg-panel);
+    border-left:1px solid var(--border); display:none; flex-direction:column;
     overflow:hidden;">
-    <div style="padding:14px 16px 10px; border-bottom:1px solid #2d3748;
+    <div style="padding:14px 16px 10px; border-bottom:1px solid var(--border);
                 display:flex; align-items:center; justify-content:space-between;">
       <span style="font-size:.75rem;font-weight:700;letter-spacing:.08em;
-                   text-transform:uppercase;color:#475569">Selected</span>
+                   text-transform:uppercase;color:var(--text-faint)">Selected</span>
       <button onclick="clearLabels()" style="
-        background:none; border:1px solid #2d3748; border-radius:5px;
-        color:#64748b; font-size:.7rem; padding:2px 8px; cursor:pointer;">
+        background:none; border:1px solid var(--border); border-radius:5px;
+        color:var(--text-dim); font-size:.7rem; padding:2px 8px; cursor:pointer;">
         Clear all
       </button>
     </div>
     <div id="selection-list" style="
       flex:1; overflow-y:auto; padding:8px 10px; font-size:.82rem;
-      color:#94a3b8; line-height:1.6;">
-      <div style="color:#475569;font-style:italic;padding:4px 2px">
+      color:var(--text-muted); line-height:1.6;">
+      <div style="color:var(--text-faint);font-style:italic;padding:4px 2px">
         Click residues in the viewer
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ── Help &amp; feedback ── -->
+<div class="help-overlay" id="help-overlay">
+  <div class="help-card">
+    <div class="help-head">
+      <div>
+        <h3>Help &amp; feedback</h3>
+        <div style="font-size:.76rem;color:var(--text-dim)">Questions, problems and ideas all go to the same place.</div>
+      </div>
+      <button class="score-close" style="margin-left:auto" onclick="closeHelp()" title="Close (Esc)">&times;</button>
+    </div>
+
+    <p>If you have a question or something to suggest, please open an issue on the
+    project repository. That keeps everything in one place and means the answer is
+    there for whoever asks next.</p>
+
+    <p>Worth raising as an issue:</p>
+    <ul>
+      <li>Questions about the structures, sequences or interface residues shown here</li>
+      <li>Questions about the curated interaction data or the prediction scores</li>
+      <li>Anything about the project itself</li>
+      <li>Feature requests, and anything that looks wrong or broken</li>
+    </ul>
+
+    <div class="help-actions">
+      <a class="help-cta" id="help-new-issue" href="https://github.com/AAGI-AUS/3dmol-viewer-ccdm/issues/new"
+         target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>
+      <a href="https://github.com/AAGI-AUS/3dmol-viewer-ccdm/issues"
+         target="_blank" rel="noopener noreferrer">Browse existing issues</a>
+    </div>
+    <div class="help-note" id="help-context"></div>
+  </div>
+</div>
+
+<!-- ── Model quality comparison (issue #12) ── -->
+<div class="score-overlay" id="score-overlay">
+  <div class="score-card">
+    <div class="score-head">
+      <div>
+        <h3 id="score-title">—</h3>
+        <div class="sub" id="score-sub"></div>
+      </div>
+      <div class="score-head-actions">
+        <div class="seg">
+          <button id="score-scope-summary" class="active" onclick="setScoreScope('summary')">Summary</button>
+          <button id="score-scope-extended" onclick="setScoreScope('extended')">Extended</button>
+        </div>
+        <div class="seg">
+          <button id="score-view-heatmap" class="active" onclick="setScoreView('heatmap')">Heatmap</button>
+          <button id="score-view-table" onclick="setScoreView('table')">Table</button>
+        </div>
+        <button class="ghost-btn" id="score-copy-btn" onclick="copyScoreTsv()">Copy as TSV</button>
+        <button class="ghost-btn" onclick="downloadScoreCsv()" title="Every metric, including both directions of LIS and ipSAE">Download CSV</button>
+        <button class="score-close" onclick="closeScorePanel()" title="Close (Esc)">&times;</button>
+      </div>
+    </div>
+    <div class="score-body" id="score-body"></div>
+  </div>
+</div>
+
+<!-- ── AlphaFold 3 terms of use (issue #27) ── -->
+<div class="help-overlay" id="terms-overlay">
+  <div class="help-card terms-card">
+    <div class="help-head">
+      <div>
+        <h3>AlphaFold 3 terms of use</h3>
+        <div style="font-size:.76rem;color:var(--text-dim)">These apply to the AlphaFold 3 predictions in this viewer and to anything derived from them.</div>
+      </div>
+      <button class="score-close" style="margin-left:auto" onclick="closeTerms()" title="Close (Esc)">&times;</button>
+    </div>
+
+    <h4>Legally binding terms of use</h4>
+    <blockquote>
+      By using this information, you agree to AlphaFold 3 Output Terms of Use found at
+      https://github.com/google-deepmind/alphafold3/blob/main/OUTPUT_TERMS_OF_USE.md.
+    </blockquote>
+    <div class="help-actions">
+      <a href="legal/AF3_OUTPUT_TERMS_OF_USE.txt" target="_blank" rel="noopener noreferrer">Copy of the Output Terms of Use</a>
+      <a href="legal/LEGALLY_BINDING_TERMS_OF_USE.txt" target="_blank" rel="noopener noreferrer">Legally Binding Terms of Use (text file)</a>
+    </div>
+
+    <h4>Non-commercial use only</h4>
+    <p>AlphaFold 3 predictions are provided for non-commercial use only. Please read the Output
+    Terms of Use for the full conditions, including who may use the predictions. If this summary
+    and those terms differ, the terms apply.</p>
+
+    <h4>Attribution and citation</h4>
+    <p>The AlphaFold 3 model was developed by Google DeepMind and Isomorphic Labs. This project is
+    not affiliated with or endorsed by Google, Google DeepMind or Isomorphic Labs. The AlphaFold 3
+    model parameters are not published or distributed here.</p>
+    <p>If you share these predictions or disclose findings from them, cite:
+    Abramson, J. et al. Accurate structure prediction of biomolecular interactions with AlphaFold 3.
+    <i>Nature</i> 630, 493–500 (2024).
+    <a href="https://doi.org/10.1038/s41586-024-07487-w" target="_blank" rel="noopener noreferrer">doi:10.1038/s41586-024-07487-w</a></p>
+
+    <h4>Modifications to the original predictions</h4>
+    <p>The coordinates and per-atom confidence values are not changed. The structure file is served
+    and exported exactly as AlphaFold 3 wrote it, under a new file name
+    (<code>&lt;identifier&gt;_af3.cif</code>). This project does add the following:</p>
+    <ul>
+      <li>3D and sequence-track views, with chain colouring, effector and target labels, and pLDDT colouring</li>
+      <li>Interface residues and the pDockQ, pDockQ2, LIS and ipSAE scores, calculated by this project rather than by AlphaFold 3</li>
+      <li>The composite score 0.8·ipTM + 0.2·pTM</li>
+      <li>Values rounded for display</li>
+      <li>A caption on exported images and videos, and a notice at the top of exported score tables</li>
+    </ul>
+    <p>Only the highest-ranked of the five samples from each run is shown, and the other samples are not distributed.</p>
+
+    <h4>Prediction details</h4>
+    <ul>
+      <li><b>Software:</b> AlphaFold 3 version 3.0.1, model AlphaFold-beta-20231127</li>
+      <li><b>Run dates:</b> 29 April to 3 May 2026</li>
+      <li><b>Configuration:</b> one seed (1) and five samples per pair, with unpaired MSAs, paired MSAs and templates as input</li>
+      <li><b>Structure shown:</b> the highest-ranked of the five samples, by AlphaFold 3's ranking score</li>
+      <li><b>Scores shown:</b> pTM, ipTM and fraction disordered are the values for the structure shown</li>
+      <li><b>Confidence metrics:</b> per-atom pLDDT, stored in the B-factor column of the structure file, plus pTM, ipTM and fraction disordered</li>
+    </ul>
   </div>
 </div>
 
@@ -534,7 +1224,9 @@
 let token = sessionStorage.getItem('token') || null;
 let selectedEntry = null;   // full metadata row for the chosen interaction
 let selectedMethod = null;  // 'af3' | 'afm' | 'boltz2' | 'chai' | 'esmfold2'
-let selectedModel = null;
+// Only the best-ranked prediction is served, so the model segment of the
+// structure API is fixed at 0 (issue #21).
+const MODEL = 0;
 let methodAvailability = {};
 let currentStyle = 'cartoon';
 let viewer = null;
@@ -546,6 +1238,13 @@ let spinning = false;
 let sequenceData = null;
 let sequenceVisible = false;
 let plddtMode = false;
+let plddtByResidue = null;   // 'chain:resi' -> pLDDT, read off the loaded model
+// What the viewer is actually showing right now — not the same thing as the
+// sidebar selection, which moves on as soon as another interaction is clicked.
+let loadedStructure = null;  // { entry, method, model }
+let currentStructureText = null;
+let currentStructureFormat = null;
+let videoRecording = false;
 
 const AA3TO1 = {
   ALA:'A', ARG:'R', ASN:'N', ASP:'D', CYS:'C', GLN:'Q', GLU:'E',
@@ -560,13 +1259,43 @@ const AA_NAME = {
   THR:'Threonine', TRP:'Tryptophan', TYR:'Tyrosine', VAL:'Valine'
 };
 
-const DEFAULTS = {
-  'color-A-base': '#0072B2', 'color-A-iface': '#56B4E9',
-  'color-B-base': '#E69F00', 'color-B-iface': '#FFD700'
+// ── Chain palettes ───────────────────────────────────────────────────────────
+// Built on the Okabe-Ito colour-blind-safe set. The two chains are separated
+// on the blue/vermillion axis, which is the one pairing that survives all
+// three common types of colour vision deficiency (deutan, protan, tritan);
+// within a chain, base and interface differ only in lightness, and lightness
+// is safe for everyone. Yellow is deliberately absent: it has almost no
+// contrast against the light theme's beige, and against white it fails for
+// tritanopia too.
+//
+// Each theme gets its own tuning of the same hues, because "make the
+// interface stand out" means opposite things on the two backgrounds — on
+// near-black the highlight has to be lighter than the chain, on beige it has
+// to be darker. The hues stay put, so a structure is recognisably the same
+// one in either theme.
+const PALETTES = {
+  dark: {
+    'color-A-base': '#3E9BDD', 'color-A-iface': '#9BD4FF',
+    'color-B-base': '#E8703A', 'color-B-iface': '#FFB284'
+  },
+  light: {
+    'color-A-base': '#1A6FA8', 'color-A-iface': '#0A3D62',
+    'color-B-base': '#C85A1E', 'color-B-iface': '#7A2E06'
+  }
 };
-// Fallback colours for chains C/D/E
-const EXTRA_BASE  = ['#a3e635', '#fb923c', '#c084fc'];
-const EXTRA_IFACE = ['#76ff03', '#ffd600', '#e040fb'];
+
+// Fallback colours for chains C/D/E, continuing the same safe set: bluish
+// green, violet, neutral. These were picked by simulating protanopia,
+// deuteranopia and tritanopia and maximising the smallest CIE76 distance
+// between any two chains, subject to each staying >=3:1 against its own
+// background — no pair drops below dE 15 under any of the three.
+const EXTRAS = {
+  dark:  { base:  ['#00C25A', '#AC20DF', '#AFA69D'],
+           iface: ['#9CF5C5', '#D98CF5', '#E8E2DC'] },
+  light: { base:  ['#0F7B52', '#6A1B6A', '#4A525C'],
+           iface: ['#04351F', '#210828', '#171A1F'] }
+};
+
 
 function getColors() {
   return {
@@ -578,12 +1307,16 @@ function getColors() {
 }
 
 function onColorChange() {
+  updateChainRoleLabels();
+  renderChainLegend();
   if (structureLoaded) applyStyle();
 }
 
 function resetColors() {
-  for (const [id, val] of Object.entries(DEFAULTS))
+  for (const [id, val] of Object.entries(PALETTES[themeMode]))
     document.getElementById(id).value = val;
+  updateChainRoleLabels();
+  renderChainLegend();
   if (structureLoaded) applyStyle();
 }
 
@@ -615,6 +1348,10 @@ function logout() {
   document.getElementById('app').classList.remove('visible');
   document.getElementById('login-screen').style.display = 'flex';
   if (viewer) { viewer.clear(); viewer = null; }
+  structureLoaded = false;
+  currentStructureText = null;
+  currentStructureFormat = null;
+  updateExportMenu();
 }
 
 document.getElementById('password').addEventListener('keydown', e => {
@@ -622,15 +1359,81 @@ document.getElementById('password').addEventListener('keydown', e => {
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Theme (dark / light) — the whole interface flips, not just the canvas.
+// Every CSS colour resolves through a token on :root, so setting data-theme
+// repaints sidebar, panels and overlays in one go; the 3D scene is the one
+// thing 3Dmol paints itself, so its background is pushed across by hand.
+// That canvas colour is also what pngURI() and the WEBM capture bake in, so
+// exports come out on whatever background the user is looking at.
+const VIEWER_BG = { dark: '#0a0d14', light: '#F5F5DC' };
+const THEME_KEY = 'ccdm-theme';
+
+function storedTheme() {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+  } catch (e) {
+    return 'dark';   // private mode / storage blocked
+  }
+}
+
+let themeMode = storedTheme();
+
+// Which theme's chain defaults are currently sitting in the colour pickers.
+// The markup ships with the dark set, so that is where we start from.
+let paletteTheme = 'dark';
+// Guarded so the parse-time call below cannot reach into state that the rest
+// of the script has not declared yet.
+let appReady = false;
+
+// Move the pickers onto the new theme's defaults — but only for swatches the
+// user has not touched. A colour they chose themselves is a deliberate
+// choice and outranks the theme.
+function syncChainPalette(fromTheme) {
+  const from = PALETTES[fromTheme], to = PALETTES[themeMode];
+  for (const id of Object.keys(to)) {
+    const el = document.getElementById(id);
+    if (el && el.value.toLowerCase() === from[id].toLowerCase()) el.value = to[id];
+  }
+  paletteTheme = themeMode;
+}
+
+function setViewerBackground(mode) {
+  themeMode = (mode === 'light') ? 'light' : 'dark';
+  try { localStorage.setItem(THEME_KEY, themeMode); } catch (e) { /* ignore */ }
+
+  document.documentElement.setAttribute('data-theme', themeMode);
+  document.getElementById('bg-btn-dark').classList.toggle('active', themeMode === 'dark');
+  document.getElementById('bg-btn-light').classList.toggle('active', themeMode === 'light');
+  syncChainPalette(paletteTheme);
+
+  if (viewer) {
+    viewer.setBackgroundColor(VIEWER_BG[themeMode]);
+    viewer.render();
+  }
+  if (appReady) {
+    updateChainRoleLabels();
+    renderChainLegend();
+    if (structureLoaded) applyStyle();
+    if (sequenceData) renderSequence();
+  }
+}
+
+// Keep the theme applied on the login screen too, before the viewer exists.
+setViewerBackground(themeMode);
+
 async function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
 
-  // Init 3Dmol viewer
+  // Init 3Dmol viewer — honour the theme the user last chose
   viewer = $3Dmol.createViewer(document.getElementById('viewer'), {
-    backgroundColor: '#0a0d14'
+    backgroundColor: VIEWER_BG[themeMode]
   });
+  setViewerBackground(themeMode);
 
+  updateChainRoleLabels();
+  appReady = true;
+  await loadScoreSchema();
   await loadFilters();
   await searchEntries();
 }
@@ -743,7 +1546,7 @@ function renderEntries(entries) {
     return `<div class="pair-item${selected ? ' selected' : ''}"
                  onclick="selectEntry('${e.identifier.replace(/'/g, "\\'")}')"
                  title="${escapeAttr(label + ' — ' + sub)}">
-              ${escapeHtml(label)}<br><span style="color:#475569;font-size:.75rem">${escapeHtml(sub)}</span>
+              ${escapeHtml(label)}<br><span style="color:var(--text-faint);font-size:.75rem">${escapeHtml(sub)}</span>
             </div>`;
   }).join('');
 }
@@ -753,29 +1556,34 @@ async function selectEntry(identifier) {
   if (!entry) return;
   selectedEntry = entry;
   selectedMethod = null;
-  selectedModel = null;
   methodAvailability = {};
   renderEntries(allEntries);
   renderMetaPanel(entry);
+  updateShowingBar();
+  setSidebarTab('model');
+  renderQualityPreview();
+  updateChainRoleLabels();
+  renderChainLegend();
 
-  document.getElementById('method-row').innerHTML = '<span style="color:#475569;font-size:.8rem">Loading methods…</span>';
-  document.getElementById('model-grid').innerHTML = '';
+  document.getElementById('method-row').innerHTML = '<span style="color:var(--text-faint);font-size:.8rem">Loading methods…</span>';
 
   const data = await apiGet(`/api/methods/${encodeURIComponent(identifier)}`);
   methodAvailability = data ? data.methods : {};
   renderMethods();
+  renderQualityPreview();
   updateLoadBtn();
 }
 
 function renderMetaPanel(e) {
   const panel = document.getElementById('meta-panel');
   panel.style.display = 'block';
+  document.getElementById('meta-empty').style.display = 'none';
+  updateSelectedBar(e);
   const row = (label, val) => val ? `<div class="meta-row"><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
   panel.innerHTML =
-    `<div class="meta-title">${escapeHtml(entryLabel(e))}</div>` +
-    `<div class="meta-row" style="color:#64748b">${escapeHtml(entrySub(e))}</div>` +
+    row('Effector (chain A)', e.effectorName) +
+    row('Target (chain B)', e.plantProteinName) +
     row('Allele', e.effectorAllele) +
-    row('Host protein', e.plantProteinName) +
     row('Host description', e.hostProteinDescription) +
     row('Pathogen', e.pathogenSpecies) +
     row('Plant', e.plantSpecies) +
@@ -796,9 +1604,16 @@ function renderMethods() {
   row.innerHTML = METHOD_ORDER.map(m => {
     const info = methodAvailability[m] || { label: m, models: [] };
     const avail = info.models && info.models.length > 0;
+    // Headline ranking score under the name, so the quality ordering is legible
+    // without opening the comparison panel at all.
+    const s = methodScores(m) || {};
+    const head = s.composite !== undefined ? s.composite : s.ipTM;
+    const badge = head === undefined || head === null ? ''
+      : `<span class="mb-score" style="color:${heatColor(head, 1)}">${head.toFixed(2)}</span>`;
     return `<button class="method-btn${m === selectedMethod ? ' active' : ''}"
-              onclick="selectMethod('${m}')" ${avail ? '' : 'disabled'}>
-              ${info.label || m}
+              onclick="selectMethod('${m}')" ${avail ? '' : 'disabled'}
+              title="${avail ? escapeAttr(info.label || m) : 'No structure files for this method'}">
+              ${info.label || m}${badge}
             </button>`;
   }).join('');
 }
@@ -807,39 +1622,13 @@ function selectMethod(method) {
   const info = methodAvailability[method];
   if (!info || !info.models || !info.models.length) return;
   selectedMethod = method;
-  selectedModel = null;
   renderMethods();
-  renderModels(info.models);
-  updateLoadBtn();
-}
-
-// ── Models ────────────────────────────────────────────────────────────────────
-function renderModels(models) {
-  const grid = document.getElementById('model-grid');
-  if (!models || !models.length) {
-    grid.innerHTML = '<span style="color:#475569;font-size:.85rem">Select a method</span>';
-    return;
-  }
-  grid.innerHTML = [0,1,2,3,4].map(n => {
-    const avail = models.includes(n);
-    return `<button class="model-btn${n === selectedModel ? ' active' : ''}"
-              onclick="selectModel(${n})" ${avail ? '' : 'disabled'}>
-              ${n}
-            </button>`;
-  }).join('');
-}
-
-function selectModel(n) {
-  selectedModel = n;
-  document.querySelectorAll('.model-btn').forEach((b, i) => {
-    b.classList.toggle('active', i === n);
-  });
+  renderQualityPreview();
   updateLoadBtn();
 }
 
 function updateLoadBtn() {
-  document.getElementById('load-btn').disabled =
-    !(selectedEntry && selectedMethod && selectedModel !== null);
+  document.getElementById('load-btn').disabled = !(selectedEntry && selectedMethod);
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -847,6 +1636,28 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 function escapeAttr(s) { return escapeHtml(s); }
+
+// navigator.clipboard is unavailable on plain-HTTP origins, which is exactly
+// how the viewer is reached by IP — so the hidden-textarea route is a real
+// fallback here, not legacy-browser courtesy.
+function copyText(text, done) {
+  const ok = typeof done === 'function' ? done : () => {};
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(ok).catch(() => copyTextFallback(text, ok));
+  } else {
+    copyTextFallback(text, ok);
+  }
+}
+
+function copyTextFallback(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } finally { ta.remove(); }
+}
 
 // ── Style ─────────────────────────────────────────────────────────────────────
 function setStyle(style) {
@@ -856,12 +1667,154 @@ function setStyle(style) {
   if (viewer && viewer.getModel()) applyStyle();
 }
 
+// Every AFM/AF3/Boltz-2/Chai/ESMFold2 model in this collection is built the
+// same way: chain A is the pathogen effector, chain B the host target protein.
+// Everything user-facing spells that out so the two halves are never confused.
+// Chain letters are not dependable across methods, so roles are resolved from
+// each loaded structure rather than assumed from the letter, and everything
+// downstream — colours, protein names, the legend, interface residues — keys
+// off the role.
+let chainRoles = { A: 'Effector', B: 'Target' };
+
+// Chains come in input order (effector first, then target). Where the curated
+// sequence lengths are known they get the final say, so a genuinely reversed
+// file is caught rather than silently mislabelled.
+function computeChainRoles() {
+  const chains = chainsInStructure();
+  const roles = {};
+  if (chains.length === 1) {
+    roles[chains[0]] = 'Effector';
+  } else if (chains.length >= 2) {
+    let [first, second] = chains;
+    const effLen = selectedEntry && selectedEntry.effectorSeqLen;
+    const tgtLen = selectedEntry && selectedEntry.targetSeqLen;
+    if (sequenceData && effLen && tgtLen) {
+      const a = sequenceData[first].length, b = sequenceData[second].length;
+      const asIs    = Math.abs(a - effLen) + Math.abs(b - tgtLen);
+      const swapped = Math.abs(b - effLen) + Math.abs(a - tgtLen);
+      if (swapped < asIs) [first, second] = [second, first];
+    }
+    roles[first] = 'Effector';
+    roles[second] = 'Target';
+  }
+  chainRoles = roles;
+}
+
+// Which colour/name slot a chain occupies: 'A' for the effector, 'B' for the
+// target, null for anything else in the file.
+function chainSlot(chain) {
+  const role = chainRoles[chain];
+  return role === 'Effector' ? 'A' : role === 'Target' ? 'B' : null;
+}
+
+function chainRole(chain) { return chainRoles[chain] || ''; }
+
+// Real protein name behind a chain, from the selected interaction's metadata.
+// The entry the viewer is showing, falling back to the selection before
+// anything has been loaded.
+function structureEntry() {
+  return (loadedStructure && loadedStructure.entry) || selectedEntry;
+}
+
+function chainProteinName(chain) {
+  const entry = structureEntry();
+  if (!entry) return '';
+  const slot = chainSlot(chain);
+  if (slot === 'A') return entry.effectorName || '';
+  if (slot === 'B') return entry.plantProteinName || '';
+  return '';
+}
+
+// "Chain A · Effector (VirE2)" — each part dropped when it isn't known.
+function chainLabel(chain, prefix) {
+  const role = chainRole(chain);
+  const name = chainProteinName(chain);
+  let out = (prefix === undefined ? 'Chain ' : prefix) + chain;
+  if (role) out += ' · ' + role;
+  if (name) out += ' (' + name + ')';
+  return out;
+}
+
+// Compact form for the crowded 3D labels: "A (Effector)".
+function chainShort(chain) {
+  const role = chainRole(chain);
+  return role ? chain + ' (' + role + ')' : chain;
+}
+
+// Readable text colour over a user-chosen swatch colour.
+function textOn(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex));
+  if (!m) return '#ffffff';
+  const v = parseInt(m[1], 16);
+  const lum = 0.299 * (v >> 16) + 0.587 * ((v >> 8) & 255) + 0.114 * (v & 255);
+  return lum > 150 ? '#0f1117' : '#ffffff';
+}
+
+// Chains actually present in the loaded model; falls back to the A/B pair.
+function chainsInStructure() {
+  if (sequenceData) return Object.keys(sequenceData).sort();
+  return ['A', 'B'];
+}
+
+// Protein names in the colour sidebar, refreshed whenever the entry changes.
+function updateChainRoleLabels() {
+  const present = chainsInStructure();
+  for (const slot of ['A', 'B']) {
+    // The row is fixed (effector on top, target below); the letter on its tag is
+    // whatever this structure actually calls that chain.
+    const chain = present.find(c => chainSlot(c) === slot)
+               || (slot === 'A' ? 'A' : 'B');
+    const nameEl = document.getElementById('chain-protein-' + slot);
+    if (nameEl) {
+      const name = chainProteinName(chain);
+      nameEl.textContent = name;
+      nameEl.title = name;
+    }
+    const tagEl = document.getElementById('chain-tag-' + slot);
+    if (tagEl) {
+      const col = chainColor(chain, 'base');
+      tagEl.textContent = chain;
+      tagEl.style.background = col;
+      tagEl.style.color = textOn(col);
+      tagEl.title = chainLabel(chain);
+    }
+  }
+}
+
+// Legend pinned in the viewer so effector vs target is readable off the 3D view.
+function renderChainLegend() {
+  const el = document.getElementById('chain-legend');
+  if (!el) return;
+  if (!structureLoaded) {
+    el.classList.remove('visible');
+    el.innerHTML = '';
+    return;
+  }
+  el.innerHTML = chainsInStructure().map(chain => {
+    const role = chainRole(chain) || 'Chain ' + chain;
+    const name = chainProteinName(chain);
+    // pLDDT mode recolours by confidence, so a chain swatch would lie there.
+    const col   = plddtMode ? '#2d3748' : chainColor(chain, 'base');
+    const swatch = `<span class="chain-legend-swatch"
+                          style="background:${col};color:${textOn(col)}">${escapeHtml(chain)}</span>`;
+    return `<div class="chain-legend-row" title="${escapeAttr(chainLabel(chain))}">
+              ${swatch}
+              <span class="chain-legend-role">${escapeHtml(role)}</span>
+              <span class="chain-legend-name">${escapeHtml(name)}</span>
+            </div>`;
+  }).join('');
+  el.classList.add('visible');
+}
+
 function chainColor(chain, type) {
   const colors = getColors();
-  if (colors[chain]) return colors[chain][type];
-  const extra = type === 'base' ? EXTRA_BASE : EXTRA_IFACE;
-  const idx = ['C','D','E'].indexOf(chain);
-  return extra[idx] || '#ffffff';
+  const slot = chainSlot(chain);
+  if (slot && colors[slot]) return colors[slot][type];
+  // Anything beyond the effector/target pair gets a fallback colour, ordered by
+  // its position among the leftover chains rather than by letter.
+  const extra = EXTRAS[themeMode][type === 'base' ? 'base' : 'iface'];
+  const idx = chainsInStructure().filter(c => !chainSlot(c)).indexOf(chain);
+  return extra[idx] || (themeMode === 'light' ? '#2A2B24' : '#ffffff');
 }
 
 // AlphaFold DB pLDDT confidence bands — per-residue score lives in the
@@ -875,16 +1828,50 @@ function plddtColor(atom) {
   return '#FF7D45';
 }
 
+// Per-residue pLDDT taken off the model already in the viewer, so the sequence
+// track and the 3D view are coloured from the same numbers. The AlphaFold-family
+// writers put one score on every atom of a residue, so the CA carries it; the
+// mean over the residue is only a fallback for files without a CA. Left null for
+// anything whose B-factor column is not a confidence score.
+function computePlddtMap() {
+  plddtByResidue = null;
+  if (!viewer) return;
+  const acc = {};
+  for (const a of viewer.selectedAtoms({}) || []) {
+    if (typeof a.b !== 'number' || !isFinite(a.b)) continue;
+    const key = `${a.chain}:${a.resi}`;
+    const e = acc[key] || (acc[key] = { sum: 0, n: 0, ca: null });
+    e.sum += a.b;
+    e.n++;
+    if (a.atom === 'CA') e.ca = a.b;
+  }
+  const map = {};
+  let any = false;
+  for (const [key, e] of Object.entries(acc)) {
+    map[key] = e.ca !== null ? e.ca : e.sum / e.n;
+    any = true;
+  }
+  if (any) plddtByResidue = map;
+}
+
+function residuePlddt(chain, resi) {
+  if (!plddtByResidue) return null;
+  const v = plddtByResidue[`${chain}:${resi}`];
+  return typeof v === 'number' ? v : null;
+}
+
 function onPlddtToggle() {
   plddtMode = document.getElementById('plddt-toggle').checked;
   document.getElementById('plddt-legend').classList.toggle('visible', plddtMode);
   document.getElementById('color-section').classList.toggle('disabled', plddtMode);
   if (structureLoaded) applyStyle();
+  // The sequence tracks carry the same banding, so they follow the toggle too.
+  if (sequenceData) renderSequence();
 }
 
 function applyStyle() {
   viewer.setStyle({}, {});
-  const chains = ['A','B','C','D','E'];
+  const chains = [...new Set([...chainsInStructure(), 'A', 'B', 'C', 'D', 'E'])];
   if (plddtMode) {
     if (currentStyle === 'cartoon') {
       viewer.setStyle({}, { cartoon: { colorfunc: plddtColor } });
@@ -900,17 +1887,25 @@ function applyStyle() {
     chains.forEach(c =>
       viewer.setStyle({ chain: c }, { stick: { color: chainColor(c, 'base'), radius: 0.15 } }));
   } else {
-    viewer.setStyle({}, { sphere: { colorscheme: 'chainHetatm', scale: 0.4 } });
+    chains.forEach(c =>
+      viewer.setStyle({ chain: c }, { sphere: { color: chainColor(c, 'base'), scale: 0.4 } }));
   }
   if (interfaceData) applyInterfaceOverlay();
   else viewer.render();
+  renderChainLegend();
 }
 
 function applyInterfaceOverlay() {
   if (!interfaceData || !viewer) return;
   for (const [chain, resi] of Object.entries(interfaceData)) {
     if (!resi.length) continue;
-    if (plddtMode) {
+    if (currentStyle === 'sphere') {
+      // Sticks and cartoons sit inside the spheres and never show — scale the
+      // interface atoms up instead so they break the surface.
+      viewer.addStyle({ chain, resi }, plddtMode
+        ? { sphere: { colorfunc: plddtColor, scale: 0.62 } }
+        : { sphere: { color: chainColor(chain, 'iface'), scale: 0.62 } });
+    } else if (plddtMode) {
       // Keep pLDDT coloring — just reveal side chains at the interface, uncolored.
       viewer.addStyle({ chain, resi }, { stick: { colorfunc: plddtColor, radius: 0.18 } });
     } else {
@@ -924,7 +1919,7 @@ function applyInterfaceOverlay() {
 
 // ── Load structure ────────────────────────────────────────────────────────────
 async function loadStructure() {
-  if (!selectedEntry || !selectedMethod || selectedModel === null) return;
+  if (!selectedEntry || !selectedMethod) return;
   const id = selectedEntry.identifier;
 
   setStatus('Loading…', '');
@@ -932,7 +1927,7 @@ async function loadStructure() {
 
   try {
     const resp = await fetch(
-      `/api/structure/${selectedMethod}/${encodeURIComponent(id)}/${selectedModel}`,
+      `/api/structure/${selectedMethod}/${encodeURIComponent(id)}/${MODEL}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!resp.ok) throw new Error((await resp.json()).error || 'Failed');
@@ -941,24 +1936,38 @@ async function loadStructure() {
 
     viewer.clear();
     interfaceData = null;
+    sequenceData = null;
+    plddtByResidue = null;
     structureLoaded = false;
+    loadedStructure = null;
     clearLabels();
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('iface-status').textContent = '';
     viewer.addModel(text, fmt);
+    computePlddtMap();
     structureLoaded = true;
+    loadedStructure = {
+      entry: selectedEntry, method: selectedMethod, model: MODEL,
+      label: (methodAvailability[selectedMethod] || {}).label || selectedMethod,
+    };
+    currentStructureText = text;
+    currentStructureFormat = fmt;
+    await loadSequence();
+    computeChainRoles();
+    updateChainRoleLabels();
     applyStyle();
     setupClickHandler();
     viewer.zoomTo();
     viewer.render();
     document.getElementById('interface-section').style.display = 'block';
     const methodLabel = (methodAvailability[selectedMethod] || {}).label || selectedMethod;
-    setStatus(`Loaded: ${entryLabel(selectedEntry)} · ${methodLabel} · Model ${selectedModel}`, 'ok');
-    sequenceData = null;
-    loadSequence();
+    setStatus(`Loaded: ${entryLabel(selectedEntry)} · ${methodLabel}`, 'ok');
+    updateShowingBar();
+    updateExportMenu();
   } catch (err) {
     setStatus('Error: ' + err.message, 'error');
   } finally {
+    updateAf3Notice();
     showSpinner(false);
   }
 }
@@ -974,6 +1983,302 @@ function toggleSpin() {
   document.getElementById('btn-spin').classList.toggle('active', spinning);
 }
 
+// ── Export ────────────────────────────────────────────────────────────────────
+function updateExportMenu() {
+  document.getElementById('btn-export').disabled = !structureLoaded;
+  document.querySelectorAll('#export-menu button').forEach(b => { b.disabled = !structureLoaded; });
+}
+
+function toggleExportMenu() {
+  if (document.getElementById('btn-export').disabled) return;
+  document.getElementById('export-menu').classList.toggle('visible');
+}
+
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('export-menu-wrap');
+  if (wrap && !wrap.contains(e.target)) document.getElementById('export-menu').classList.remove('visible');
+});
+
+function closeExportMenu() {
+  document.getElementById('export-menu').classList.remove('visible');
+}
+
+function sanitizeFilename(s) {
+  return String(s).replace(/[^a-zA-Z0-9._-]+/g, '_');
+}
+
+function exportBaseName() {
+  if (!loadedStructure) return 'structure';
+  const { entry, method } = loadedStructure;
+  return sanitizeFilename(`${entry.identifier}_${method}`);
+}
+
+function triggerDownload(url, filename) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  // Removing the anchor synchronously can race with the browser reading the
+  // download attribute for blob: URLs, which drops the filename entirely
+  // (Chrome falls back to an "Unconfirmed ####.crdownload" placeholder).
+  // Deferring the removal a tick lets the download start with the name intact.
+  setTimeout(() => a.remove(), 0);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  triggerDownload(url, filename);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// blob: downloads can get stuck as an "Unconfirmed ####.crdownload" placeholder
+// when Chrome can't reach Safe Browsing to clear the file (seen on this
+// network), which loses the filename entirely — same as the pngURI() image
+// export, which uses a data: URI and isn't affected. Every text export goes the
+// data: route so the name survives; only the video export, too big for a data:
+// URI, still uses blob:.
+
+// CRC-32 of the uncompressed bytes, required by both ZIP headers. The table is
+// built once on first use.
+let crcTable = null;
+function crc32(bytes) {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      crcTable[i] = c >>> 0;
+    }
+  }
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++)
+    crc = crcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// Wraps one text file in a ZIP archive, entry name and all, and returns it as a
+// data: URI. Zipping solves both halves of the download problem at once: the
+// entry inside keeps its real .pdb / .cif / .fasta name, and the download
+// itself is a .zip — an extension Chrome's download verification has plenty
+// of reputation data for, unlike the rare ones, which can hang here waiting on
+// a Safe Browsing check that never resolves. Windows opens .zip natively, so
+// there's nothing extra to install. Deflate also cuts a ~1.6 MB PDB to a few
+// hundred KB, keeping the base64 data: URI small; browsers without
+// CompressionStream fall back to a stored (uncompressed) archive, which is
+// bigger but just as valid.
+async function zipToDataUri(text, entryName) {
+  const data = new TextEncoder().encode(text);
+  let body = data, method = 0;
+  if (window.CompressionStream) {
+    try {
+      const stream = new Blob([data]).stream()
+        .pipeThrough(new CompressionStream('deflate-raw'));
+      body   = new Uint8Array(await new Response(stream).arrayBuffer());
+      method = 8;
+    } catch {
+      body = data; method = 0;  // no deflate-raw support: store instead
+    }
+  }
+
+  const name = new TextEncoder().encode(entryName);
+  const crc  = crc32(data);
+  const d    = new Date();
+  const time = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF;
+  const date = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+
+  const buf  = new ArrayBuffer(30 + name.length + body.length + 46 + name.length + 22);
+  const view = new DataView(buf);
+  const out  = new Uint8Array(buf);
+  let o = 0;
+  const u16 = v => { view.setUint16(o, v, true); o += 2; };
+  const u32 = v => { view.setUint32(o, v, true); o += 4; };
+
+  // Local file header, then the file data itself
+  u32(0x04034b50); u16(20); u16(0); u16(method); u16(time); u16(date);
+  u32(crc); u32(body.length); u32(data.length); u16(name.length); u16(0);
+  out.set(name, o); o += name.length;
+  out.set(body, o); o += body.length;
+
+  // Central directory: one entry, pointing back at offset 0
+  const cdStart = o;
+  u32(0x02014b50); u16(20); u16(20); u16(0); u16(method); u16(time); u16(date);
+  u32(crc); u32(body.length); u32(data.length);
+  u16(name.length); u16(0); u16(0); u16(0); u16(0); u32(0); u32(0);
+  out.set(name, o); o += name.length;
+
+  // End of central directory
+  const cdEnd = o;
+  u32(0x06054b50); u16(0); u16(0); u16(1); u16(1);
+  u32(cdEnd - cdStart); u32(cdStart); u16(0);
+
+  // btoa() takes a binary string; build it in chunks so a big structure
+  // doesn't blow the argument limit of String.fromCharCode.
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < out.length; i += CHUNK)
+    bin += String.fromCharCode.apply(null, out.subarray(i, i + CHUNK));
+  return `data:application/zip;base64,${btoa(bin)}`;
+}
+
+// Fallback download for when the File System Access picker isn't available:
+// <name>.pdb.zip, holding <name>.pdb.
+async function downloadTextZipped(text, filename) {
+  triggerDownload(await zipToDataUri(text, filename), filename + '.zip');
+}
+
+function exportImage() {
+  closeExportMenu();
+  if (!structureLoaded) return;
+  const filename = exportBaseName() + '.png';
+  if (!isAf3Loaded()) { triggerDownload(viewer.pngURI(), filename); return; }
+  const img = new Image();
+  img.onload = () => {
+    const captioned = af3CaptionedCanvas(img.naturalWidth, img.naturalHeight);
+    captioned.ctx.drawImage(img, 0, 0);
+    triggerDownload(captioned.canvas.toDataURL('image/png'), filename);
+  };
+  img.onerror = () => setStatus('Image export failed', 'error');
+  img.src = viewer.pngURI();
+}
+
+// Chrome's File System Access API writes straight to a user-picked file via
+// a native Save dialog, bypassing the download-manager/Safe Browsing
+// verification step entirely (it's not a "download" in that pipeline at
+// all) — so the real extension (.fasta, .pdb, .cif) survives even on
+// networks where that verification hangs. Falls back to the old
+// download-based path (via onFallback) on browsers without support, or if
+// the user's browser throws for any reason other than cancelling.
+async function saveWithPicker(text, filename, description, onFallback) {
+  if (!window.showSaveFilePicker) return onFallback();
+  try {
+    const ext = filename.slice(filename.lastIndexOf('.'));
+    const handle = await window.showSaveFilePicker({
+      suggestedName: filename,
+      types: [{ description, accept: { 'text/plain': [ext] } }],
+    });
+    const writable = await handle.createWritable();
+    await writable.write(text);
+    await writable.close();
+  } catch (err) {
+    if (err.name !== 'AbortError') onFallback();
+  }
+}
+
+function exportStructureFile() {
+  closeExportMenu();
+  if (!structureLoaded || !currentStructureText) return;
+  const filename = exportBaseName() + '.' + currentStructureFormat;
+  saveWithPicker(currentStructureText, filename, 'Structure file',
+    () => downloadTextZipped(currentStructureText, filename));
+}
+
+// One chain as a FASTA record. The first header token stays the same ID the
+// file export writes, so a copied sequence and an exported one are traceable to
+// each other; the role and protein name ride along as the description, which is
+// what tells an effector record from a target one once it has been pasted
+// somewhere with no viewer around it.
+function chainFasta(chain) {
+  const residues = (sequenceData || {})[chain];
+  if (!residues) return '';
+  const entry = structureEntry();
+  const seq   = residues.map(r => AA3TO1[r.resn] || 'X').join('');
+  const desc  = [chainRole(chain), chainProteinName(chain)].filter(Boolean).join(' | ');
+  let out = `>${entry ? entry.identifier : 'structure'}_chain_${chain}`
+          + (desc ? ` ${desc}` : '') + '\n';
+  for (let i = 0; i < seq.length; i += 60) out += seq.slice(i, i + 60) + '\n';
+  return out;
+}
+
+function exportFasta() {
+  closeExportMenu();
+  if (!structureLoaded || !sequenceData) return;
+  const fasta = Object.keys(sequenceData).sort().map(chainFasta).join('');
+  saveWithPicker(fasta, exportBaseName() + '.fasta', 'FASTA file',
+    () => downloadTextZipped(fasta, exportBaseName() + '.fasta'));
+}
+
+// Header + sequence for a single chain, straight to the clipboard, so the
+// effector and the target can be pasted into BLAST or a notebook one at a time.
+function copyChainFasta(chain, btnId) {
+  const fasta = chainFasta(chain);
+  if (!fasta) return;
+  copyText(fasta, () => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const prev = btn.textContent;
+    btn.textContent = 'Copied';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      // renderSequence() may have replaced the button in the meantime.
+      const live = document.getElementById(btnId);
+      if (!live) return;
+      live.textContent = prev;
+      live.classList.remove('copied');
+    }, 1400);
+  });
+}
+
+// Records the viewer spinning for a few seconds and saves it as a WebM video —
+// there's no still-frame way to hand someone a "structure moving around," so
+// this captures the live canvas via MediaRecorder instead of rendering offline.
+async function exportVideo() {
+  closeExportMenu();
+  if (!structureLoaded || videoRecording) return;
+  const canvas = document.querySelector('#viewer canvas');
+  if (!canvas || !canvas.captureStream || typeof MediaRecorder === 'undefined') {
+    setStatus('Video export is not supported in this browser', 'error');
+    return;
+  }
+
+  videoRecording = true;
+  const btn = document.getElementById('btn-export-video');
+  const prevLabel = btn.textContent;
+  btn.textContent = '⏺ Recording…';
+  updateExportMenu();
+  btn.disabled = true;
+
+  const wasSpinning = spinning;
+  if (!wasSpinning) { viewer.spin('y'); }
+  let captionFrame = null;
+
+  try {
+    // AlphaFold 3 videos are recorded from a copy of the canvas with the caption
+    // band under it, because the WebGL canvas itself can't be drawn on.
+    let source = canvas;
+    if (isAf3Loaded()) {
+      const captioned = af3CaptionedCanvas(canvas.width, canvas.height);
+      source = captioned.canvas;
+      const paint = () => {
+        captioned.ctx.drawImage(canvas, 0, 0);
+        captionFrame = requestAnimationFrame(paint);
+      };
+      paint();
+    }
+
+    const stream = source.captureStream(30);
+    const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+      .find(t => MediaRecorder.isTypeSupported(t)) || '';
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    const chunks = [];
+    recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    const stopped = new Promise(resolve => recorder.onstop = resolve);
+
+    recorder.start();
+    await new Promise(r => setTimeout(r, 6000));
+    recorder.stop();
+    await stopped;
+
+    downloadBlob(new Blob(chunks, { type: 'video/webm' }), exportBaseName() + '.webm');
+  } finally {
+    if (captionFrame !== null) cancelAnimationFrame(captionFrame);
+    if (!wasSpinning) viewer.spin(false);
+    videoRecording = false;
+    btn.textContent = prevLabel;
+    updateExportMenu();
+  }
+}
+
 // ── Click annotation ──────────────────────────────────────────────────────────
 function setupClickHandler() {
   viewer.setClickable({}, true, function(atom) {
@@ -984,7 +2289,7 @@ function setupClickHandler() {
       delete activeLabels[key];
     } else {
       const col   = chainColor(atom.chain, 'base');
-      const label = `${atom.resn} ${atom.resi} · ${atom.chain}`;
+      const label = `${atom.resn} ${atom.resi} · ${chainShort(atom.chain)}`;
       activeLabels[key] = viewer.addLabel(label, {
         position:          { x: atom.x, y: atom.y, z: atom.z },
         backgroundColor:   'black',
@@ -1011,7 +2316,7 @@ function updateAtomInfoBar(atom) {
   document.getElementById('atom-info').innerHTML =
     `<span class="aa-code" style="color:${chainColor(atom.chain,'base')}">${aa1}</span>` +
     `<b>${atom.resn}</b> · ${name}<br>` +
-    `Residue <b>${atom.resi}</b> · Chain <b>${atom.chain}</b>`;
+    `Residue <b>${atom.resi}</b> · <b>${escapeHtml(chainLabel(atom.chain))}</b>`;
   document.getElementById('atom-info-bar').style.display = 'block';
 }
 
@@ -1022,7 +2327,7 @@ function updateSelectionPanel() {
 
   if (!keys.length) {
     panel.style.display = 'none';
-    list.innerHTML = '<div style="color:#475569;font-style:italic;padding:4px 2px">Click residues in the viewer</div>';
+    list.innerHTML = '<div style="color:var(--text-faint);font-style:italic;padding:4px 2px">Click residues in the viewer</div>';
     return;
   }
 
@@ -1043,16 +2348,16 @@ function updateSelectionPanel() {
     html += `<div style="margin-bottom:10px">
       <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;
                   letter-spacing:.07em;color:${col};margin-bottom:4px">
-        Chain ${chain} · ${resis.length} residue${resis.length > 1 ? 's' : ''}
+        ${escapeHtml(chainLabel(chain))} · ${resis.length} residue${resis.length > 1 ? 's' : ''}
       </div>`;
     resis.forEach(resi => {
       html += `<div style="display:flex;align-items:center;justify-content:space-between;
                            padding:3px 6px;border-radius:4px;margin-bottom:2px;
-                           background:#0f1117;cursor:pointer"
+                           background:var(--bg-sunken);cursor:pointer"
                     onclick="toggleResidueLabel('${chain}',${resi})"
                     title="Click to remove label">
         <span><b>${resi}</b></span>
-        <span style="color:#475569;font-size:.75rem">✕</span>
+        <span style="color:var(--text-faint);font-size:.75rem">✕</span>
       </div>`;
     });
     html += '</div>';
@@ -1084,60 +2389,102 @@ function clearLabels() {
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 async function loadInterface() {
-  if (!selectedEntry || !selectedMethod || selectedModel === null) return;
+  const status = document.getElementById('iface-status');
+  // Computed on the structure in the viewer, never on the sidebar selection —
+  // those two part company the moment another interaction is clicked.
+  if (!loadedStructure) {
+    status.textContent = 'Load a structure first — the interface is computed on the model in the viewer.';
+    return;
+  }
+  const { entry, method, model } = loadedStructure;
   const cutoff = parseFloat(document.getElementById('cutoff-input').value) || 10;
-  document.getElementById('iface-status').textContent = 'Calculating…';
+  status.textContent = 'Calculating…';
 
   const data = await apiGet(
-    `/api/structure/${selectedMethod}/${encodeURIComponent(selectedEntry.identifier)}/${selectedModel}/interface?cutoff=${cutoff}`
+    `/api/structure/${method}/${encodeURIComponent(entry.identifier)}/${model}/interface?cutoff=${cutoff}`
   );
-  if (!data) return;
+  if (!data) { status.textContent = 'Could not compute the interface for this model.'; return; }
 
   interfaceData = data.interface;
-  applyStyle(); // redraws base + interface overlay
+  applyStyle();      // redraws base + interface overlay
+  renderSequence();  // and marks the same residues in the sequence tracks
 
   const lines = [`Cutoff: ${data.cutoff} Å`];
   for (const [chain, resi] of Object.entries(interfaceData)) {
-    lines.push(`Chain ${chain}: ${resi.length} residues`);
+    lines.push(`${chainLabel(chain)}: ${resi.length} residues`);
     if (resi.length) lines.push(`  ${resi.join(', ')}`);
   }
-  document.getElementById('iface-status').textContent = lines.join('\n');
+  status.textContent = lines.join('\n');
 }
 
 function clearInterface() {
   interfaceData = null;
   document.getElementById('iface-status').textContent = '';
   applyStyle();
+  renderSequence();  // drop the interface marks from the sequence tracks too
 }
 
 // ── Sequence viewer ───────────────────────────────────────────────────────────
 async function loadSequence() {
-  if (!selectedEntry || !selectedMethod || selectedModel === null) return;
+  if (!loadedStructure) return;
+  const { entry, method, model } = loadedStructure;
   const data = await apiGet(
-    `/api/structure/${selectedMethod}/${encodeURIComponent(selectedEntry.identifier)}/${selectedModel}/sequence`
+    `/api/structure/${method}/${encodeURIComponent(entry.identifier)}/${model}/sequence`
   );
   if (!data) return;
   sequenceData = data;
+  // The chains this structure actually uses are only known now, and the panel
+  // labels them by role — so resolve the roles before anything renders.
+  computeChainRoles();
   renderSequence();
+  renderChainLegend();
+  // Shown by default — behind the toolbar icon the sequences were too easy to
+  // miss. Closing it applies to the structure in hand, not to the session, so
+  // the next structure loaded brings the panel back.
+  setSequenceVisible(true);
 }
 
 function toggleSequence() {
-  sequenceVisible = !sequenceVisible;
-  document.getElementById('sequence-panel').classList.toggle('visible', sequenceVisible);
-  document.getElementById('btn-seq').classList.toggle('active', sequenceVisible);
-  if (sequenceVisible && sequenceData) renderSequence();
+  setSequenceVisible(!sequenceVisible);
+}
+
+function setSequenceVisible(on) {
+  sequenceVisible = on;
+  document.getElementById('sequence-panel').classList.toggle('visible', on);
+  document.getElementById('btn-seq').classList.toggle('active', on);
+  if (on && sequenceData) renderSequence();
+  // The panel shares the viewer's column, so opening or closing it changes the
+  // canvas height — 3Dmol only picks that up when it is told to.
+  if (viewer) viewer.resize();
 }
 
 function renderSequence() {
   const body = document.getElementById('seq-panel-body');
   if (!sequenceData) return;
 
+  const title = document.getElementById('seq-panel-title');
+  if (title) {
+    title.textContent = 'Protein Sequences — ' + chainsInStructure()
+      .map(c => `Chain ${c}: ${chainRole(c) || 'unassigned'}`).join(' · ');
+  }
+
+  // Only claim the bands when they are actually painted: pLDDT mode is on and
+  // the file carried per-residue scores to paint with.
+  const bandBy = plddtMode && plddtByResidue;
+  const seqLegend = document.getElementById('seq-plddt-legend');
+  if (seqLegend) seqLegend.classList.toggle('visible', !!bandBy);
+
   let html = '';
   for (const [chain, residues] of Object.entries(sequenceData).sort()) {
     const col = chainColor(chain, 'base');
+    const copyId   = `seq-copy-${chain}`;
+    const copyWhat = chainRole(chain) || `chain ${chain}`;
     html += `<div class="seq-chain">
       <div class="seq-chain-label" style="color:${col}">
-        Chain ${chain} · ${residues.length} residues
+        <span>${escapeHtml(chainLabel(chain))} · ${residues.length} residues</span>
+        <button class="seq-copy-btn" id="${copyId}"
+                title="Copy the ${escapeAttr(copyWhat)} FASTA (header + sequence) to the clipboard"
+                onclick="copyChainFasta('${chain}','${copyId}')">Copy FASTA</button>
       </div>
       <div class="seq-track" id="seq-track-${chain}">`;
 
@@ -1145,11 +2492,20 @@ function renderSequence() {
       const aa1     = AA3TO1[resn] || '?';
       const labeled = !!activeLabels[`${chain}:${resi}`];
       const iface   = interfaceData && (interfaceData[chain] || []).includes(resi);
+      const score   = residuePlddt(chain, resi);
+      // In pLDDT mode the residue wears its confidence band; otherwise it keeps
+      // the chain colour. The interface underline survives either way.
+      const band    = bandBy && score !== null ? plddtColor({ b: score }) : null;
+      const style   = [];
+      if (band) style.push(`--plddt-bg:${band}`, `--plddt-fg:${textOn(band)}`);
+      else      style.push(`color:${iface ? chainColor(chain, 'iface') : col}`);
+      if (iface) style.push(`border-color:${chainColor(chain, 'iface')}`);
+      const tip = `${resn} ${resi}` + (score === null ? '' : ` · pLDDT ${score.toFixed(1)}`);
       html += `<span
-        class="seq-res${labeled ? ' labeled' : ''}${iface ? ' iface' : ''}"
+        class="seq-res${band ? ' plddt' : ''}${labeled ? ' labeled' : ''}${iface ? ' iface' : ''}"
         id="seq-${chain}-${resi}"
-        style="${iface ? `border-color:${chainColor(chain,'iface')}` : `color:${col}55`}"
-        title="${resn} ${resi}"
+        style="${style.join(';')}"
+        title="${escapeAttr(tip)}"
         onclick="clickSeqResidue('${chain}',${resi},'${resn}')">
           ${aa1}
         </span>`;
@@ -1218,6 +2574,527 @@ function setStatus(msg, cls) {
 function showSpinner(on) {
   document.getElementById('spinner').classList.toggle('active', on);
 }
+
+
+// ── Model quality comparison ──────────────────────────────────────────────────
+// Every metric for every method already arrives on the metadata row as
+// `entry.scores[method][metricKey]`, with NA/blank cells stripped server-side,
+// so the sidebar preview and the overlay both render without a round trip.
+let scoreSchema = null;     // { groups, metrics, methodLabels }
+let scoreView = 'heatmap';  // 'heatmap' | 'table'
+// LIS, ipSAE and MSA depth each arrive split across several columns. The
+// summary tab carries one combined row per quantity; the extended tab adds the
+// rows they were combined from, so both directions stay one click away
+// (issue #22).
+let scoreScope = 'summary'; // 'summary' | 'extended'
+
+async function loadScoreSchema() {
+  scoreSchema = await apiGet('/api/scores/metrics');
+}
+
+function methodScores(method) {
+  return (selectedEntry && selectedEntry.scores && selectedEntry.scores[method]) || null;
+}
+
+// Methods that reported at least one number for this interaction. A method with
+// no numbers at all never gets a column — issue #12 asks for failed runs to stay
+// out of the comparison entirely.
+function scoredMethods() {
+  return METHOD_ORDER.filter(m => {
+    const s = methodScores(m);
+    return s && Object.keys(s).length > 0;
+  });
+}
+
+function hasStructure(method) {
+  const info = methodAvailability[method];
+  return !!(info && info.models && info.models.length);
+}
+
+function methodDisplayName(method) {
+  const info = methodAvailability[method];
+  if (info && info.label) return info.label;
+  return (scoreSchema && scoreSchema.methodLabels && scoreSchema.methodLabels[method]) || method;
+}
+
+// Red → amber → green for 0–1 metrics; the `better:'low'` metrics get t flipped
+// so that green always means "good" no matter which direction the number runs.
+function heatColor(t, alpha) {
+  const c = Math.max(0, Math.min(1, t));
+  const hue = 0 + 130 * c;
+  const sat = 62 + 8 * Math.abs(c - 0.5) * 2;
+  return `hsla(${hue.toFixed(0)}, ${sat.toFixed(0)}%, 45%, ${alpha})`;
+}
+function depthColor(t, alpha) {
+  const c = Math.max(0, Math.min(1, t));
+  return `hsla(200, ${(45 + 40 * c).toFixed(0)}%, ${(32 + 24 * c).toFixed(0)}%, ${alpha})`;
+}
+
+function formatScore(metric, v) {
+  if (metric.scale === 'count') {
+    return v >= 10000 ? Math.round(v).toLocaleString()
+         : v >= 100   ? v.toFixed(0)
+         : v.toFixed(1);
+  }
+  return v.toFixed(3);
+}
+
+// ── Sidebar preview ───────────────────────────────────────────────────────────
+// Shows the headline ranking score per method before anything is clicked, so the
+// quality comparison is visible at a glance from the sidebar itself.
+function renderQualityPreview() {
+  const box = document.getElementById('quality-preview');
+  const btn = document.getElementById('compare-btn');
+  if (!selectedEntry) {
+    box.innerHTML = '<div class="quality-empty">Select an interaction to compare methods</div>';
+    btn.disabled = true;
+    return;
+  }
+  const methods = scoredMethods();
+  if (!methods.length) {
+    box.innerHTML = '<div class="quality-empty">No prediction scores in the metadata for this interaction</div>';
+    btn.disabled = true;
+    return;
+  }
+  btn.disabled = false;
+
+  const headline = m => {
+    const s = methodScores(m) || {};
+    return s.composite !== undefined ? s.composite
+         : s.ipTM !== undefined ? s.ipTM
+         : s.pTM;
+  };
+  const best = Math.max(...methods.map(m => headline(m) ?? 0));
+
+  box.innerHTML = METHOD_ORDER.map(m => {
+    const v = headline(m);
+    const usable = hasStructure(m);
+    const cls = `qp-row${usable ? '' : ' disabled'}${m === selectedMethod ? ' active' : ''}`;
+    const click = usable ? ` onclick="selectMethod('${m}')"` : '';
+    const title = usable
+      ? `${escapeAttr(methodDisplayName(m))} — click to select`
+      : `${escapeAttr(methodDisplayName(m))} — no structure files on disk`;
+    const right = v === undefined || v === null
+      ? '<div class="qp-na">NA</div>'
+      : `<div class="qp-val">${v.toFixed(3)}</div>`;
+    const fill = v === undefined || v === null
+      ? ''
+      : `<span class="qp-fill" style="display:block;width:${(v * 100).toFixed(1)}%;background:${heatColor(v, v === best ? 1 : .75)}"></span>`;
+    return `<div class="${cls}"${click} title="${title}">
+              <div class="qp-name">${escapeHtml(methodShort(m))}</div>
+              <div class="qp-track">${fill}</div>
+              ${right}
+            </div>`;
+  }).join('') +
+  '<div class="qp-foot">Ranking score 0.8·ipTM + 0.2·pTM. Greyed rows have scores but no structure files.</div>';
+}
+
+const METHOD_SHORT = { af3: 'AF3', afm: 'AF-Multi', boltz2: 'Boltz-2', chai: 'Chai-1', esmfold2: 'ESMFold2' };
+function methodShort(m) { return METHOD_SHORT[m] || m; }
+
+// ── Overlay ───────────────────────────────────────────────────────────────────
+async function openScorePanel() {
+  if (!selectedEntry) return;
+  if (!scoreSchema) await loadScoreSchema();   // retry if the startup fetch failed
+  if (!scoreSchema) return;
+  renderScorePanel();
+  document.getElementById('score-overlay').classList.add('open');
+}
+function closeScorePanel() {
+  document.getElementById('score-overlay').classList.remove('open');
+}
+function setScoreView(v) {
+  scoreView = v;
+  renderScorePanel();
+}
+function setScoreScope(v) {
+  scoreScope = v;
+  renderScorePanel();
+}
+
+function ringSvg(v, color) {
+  const r = 17, c = 2 * Math.PI * r;
+  const empty = v === undefined || v === null;
+  // A zero-length dash with a round cap still paints a dot, so the arc is left
+  // out entirely when there is no value rather than drawn at length 0.
+  const arc = empty ? '' :
+    `<circle cx="21" cy="21" r="${r}" fill="none" stroke="${color}" stroke-width="5"
+             stroke-linecap="round"
+             stroke-dasharray="${(Math.max(0, Math.min(1, v)) * c).toFixed(1)} ${c.toFixed(1)}"
+             transform="rotate(-90 21 21)"/>`;
+  return `<svg class="ring" width="42" height="42" viewBox="0 0 42 42">
+    <circle cx="21" cy="21" r="${r}" fill="none" style="stroke:var(--border-faint)" stroke-width="5"/>
+    ${arc}
+  </svg>`;
+}
+
+function renderScoreCards(methods) {
+  const headline = m => {
+    const s = methodScores(m) || {};
+    return s.composite !== undefined ? s.composite : (s.ipTM !== undefined ? s.ipTM : s.pTM);
+  };
+  const best = methods.reduce((a, m) =>
+    (headline(m) ?? -1) > (headline(a) ?? -1) ? m : a, methods[0]);
+
+  return METHOD_ORDER.map(m => {
+    const s = methodScores(m);
+    if (!s) {
+      return `<div class="mcard empty">
+                <div class="mcard-top"><div class="mcard-name">${escapeHtml(methodDisplayName(m))}</div></div>
+                <div class="mcard-note">No scores in metadata</div>
+              </div>`;
+    }
+    const v = headline(m);
+    const shown = v === undefined || v === null ? '—' : v.toFixed(3);
+    const mini = [
+      s.pTM  !== undefined ? `<div>pTM <b>${s.pTM.toFixed(3)}</b></div>` : '',
+      s.ipTM !== undefined ? `<div>ipTM <b>${s.ipTM.toFixed(3)}</b></div>` : '',
+    ].join('');
+    const note = hasStructure(m)
+      ? '<div class="mcard-note">Structure available</div>'
+      : '<div class="mcard-note warn">Scores only — no structure files</div>';
+    return `<div class="mcard${m === best ? ' best' : ''}">
+              ${m === best ? '<span class="mcard-tag">Best ranking</span>' : ''}
+              <div class="mcard-top">
+                ${ringSvg(v, heatColor(v ?? 0, 1))}
+                <div>
+                  <div class="mcard-name">${escapeHtml(methodDisplayName(m))}</div>
+                  <div class="mcard-headline">${shown}<small>0.8·ipTM + 0.2·pTM</small></div>
+                </div>
+              </div>
+              <div class="mcard-mini">${mini}</div>
+              ${note}
+            </div>`;
+  }).join('');
+}
+
+// One row per metric, one column per method that produced numbers. Rows where
+// nothing was computed anywhere are dropped rather than shown as a row of "—".
+function visibleMetrics(methods, scope) {
+  if (!scoreSchema) return [];
+  const withDetail = (scope || scoreScope) === 'extended';
+  return scoreSchema.metrics.filter(mt =>
+    (withDetail || !mt.detail) &&
+    methods.some(m => (methodScores(m) || {})[mt.key] !== undefined));
+}
+
+function renderMatrix(methods) {
+  const metrics = visibleMetrics(methods);
+  const head = `<thead><tr>
+      <th class="metric-col">Metric</th>
+      ${methods.map(m => `<th class="method-head${m === selectedMethod ? ' sel' : ''}"
+           onclick="pickMethodFromPanel('${m}')"
+           title="${hasStructure(m) ? 'Click to select this method' : 'No structure files for this method'}">
+           ${escapeHtml(methodShort(m))}<small>${hasStructure(m) ? 'structure' : 'no structure'}</small>
+         </th>`).join('')}
+    </tr></thead>`;
+
+  let body = '';
+  for (const group of scoreSchema.groups) {
+    const rows = metrics.filter(mt => mt.group === group.key);
+    if (!rows.length) continue;
+    body += `<tr class="group-row"><td colspan="${methods.length + 1}">${escapeHtml(group.label)}</td></tr>`;
+    for (const mt of rows) {
+      const vals = methods.map(m => (methodScores(m) || {})[mt.key]);
+      const present = vals.filter(v => v !== undefined);
+      // Unit metrics share a fixed 0–1 scale so colours mean the same thing in
+      // every row; MSA depths are unbounded, so those are scaled within the row.
+      const lo = Math.min(...present), hi = Math.max(...present);
+      const bestVal = mt.better === 'low' ? lo : hi;
+
+      body += `<tr${mt.detail ? ' class="detail-row"' : ''}>
+        <td class="metric-col">${escapeHtml(mt.label)}${mt.sub ? `<small>${escapeHtml(mt.sub)}</small>` : ''}</td>` +
+        methods.map((m, i) => {
+          const v = vals[i];
+          if (v === undefined) return '<td class="cell"><span class="cell-na">—</span></td>';
+          let t;
+          if (mt.scale === 'count') {
+            t = hi > lo ? (v - lo) / (hi - lo) : 1;
+          } else {
+            t = Math.max(0, Math.min(1, v));
+            if (mt.better === 'low') t = 1 - t;
+          }
+          const bg  = mt.scale === 'count' ? depthColor(t, .55) : heatColor(t, .30);
+          const bar = mt.scale === 'count' ? depthColor(t, 1)   : heatColor(t, 1);
+          const isBest = present.length > 1 && v === bestVal;
+          return `<td class="cell${isBest ? ' cell-best' : ''}" title="${escapeAttr(mt.label + (mt.sub ? ' (' + mt.sub + ')' : '') + ' — ' + methodDisplayName(m) + (mt.desc ? '\n' + mt.desc : ''))}">
+                    <div class="cell-box" style="background:${bg}">
+                      <div class="cell-val">${formatScore(mt, v)}</div>
+                      <div class="cell-bar"><span style="width:${(t * 100).toFixed(1)}%;background:${bar}"></span></div>
+                    </div>
+                  </td>`;
+        }).join('') + '</tr>';
+    }
+  }
+
+  return `<div class="matrix-wrap">
+            <table class="matrix${scoreView === 'table' ? ' plain' : ''}">${head}<tbody>${body}</tbody></table>
+          </div>`;
+}
+
+function renderScorePanel() {
+  const methods = scoredMethods();
+  const title = document.getElementById('score-title');
+  const sub   = document.getElementById('score-sub');
+  const body  = document.getElementById('score-body');
+
+  title.textContent = entryLabel(selectedEntry);
+  sub.textContent = methods.length
+    ? `${methods.length} of ${METHOD_ORDER.length} methods produced scores · chain A = effector, chain B = target · NA values omitted`
+    : 'No prediction scores in the metadata for this interaction';
+
+  document.getElementById('score-view-heatmap').classList.toggle('active', scoreView === 'heatmap');
+  document.getElementById('score-view-table').classList.toggle('active', scoreView === 'table');
+  document.getElementById('score-scope-summary').classList.toggle('active', scoreScope === 'summary');
+  document.getElementById('score-scope-extended').classList.toggle('active', scoreScope === 'extended');
+
+  if (!methods.length) { body.innerHTML = '<div class="quality-empty">Nothing to compare.</div>'; return; }
+
+  body.innerHTML =
+    `<div class="score-cards">${renderScoreCards(methods)}</div>` +
+    renderMatrix(methods) +
+    `<div class="score-legend">
+       <div class="legend-scale"><span>worse</span><span class="legend-grad"></span><span>better</span></div>
+       <div>★ best value in the row</div>
+       <div>— not computed for that method</div>
+       <div>MSA depth cells are shaded relative to the other methods in the same row.</div>
+       <div>AlphaFold 3 values are for non-commercial use only.
+            <button class="link-btn" onclick="openTerms()">Terms and details</button></div>
+       <div>LIS and ipSAE are the larger of their two directions; MSA depth is the
+            non-gap depth where the method reports one, otherwise the unpaired depth.
+            ${scoreScope === 'extended'
+              ? 'The indented rows are the values they were combined from.'
+              : 'The Extended tab, and the CSV, show the values they were combined from.'}</div>
+     </div>`;
+}
+
+function pickMethodFromPanel(m) {
+  if (!hasStructure(m)) return;
+  selectMethod(m);
+  renderScorePanel();
+}
+
+// Tab-separated so it drops straight into a spreadsheet next to the source TSV.
+// Copy follows the tab on screen; the CSV always carries everything, so the
+// directional LIS/ipSAE values are one download away whichever tab is open.
+function copyScoreTsv() {
+  const methods = scoredMethods();
+  const metrics = visibleMetrics(methods);
+  const lines = [['Metric', ...methods.map(m => methodDisplayName(m))].join('\t')];
+  for (const mt of metrics) {
+    const name = mt.label + (mt.sub ? ` (${mt.sub})` : '');
+    lines.push([name, ...methods.map(m => {
+      const v = (methodScores(m) || {})[mt.key];
+      return v === undefined ? 'NA' : v;
+    })].join('\t'));
+  }
+  copyText(af3TableNotice(methods) + lines.join('\n'), () => {
+    const b = document.getElementById('score-copy-btn');
+    b.textContent = 'Copied';
+    setTimeout(() => { b.textContent = 'Copy as TSV'; }, 1400);
+  });
+}
+
+function csvCell(v) {
+  const s = String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function downloadScoreCsv() {
+  const methods = scoredMethods();
+  if (!methods.length) return;
+  const metrics = visibleMetrics(methods, 'extended');
+  const rows = [['Metric', 'Detail', 'Combined from', ...methods.map(m => methodDisplayName(m))]];
+  for (const mt of metrics) {
+    rows.push([
+      mt.label,
+      mt.sub || '',
+      mt.detail ? 'yes' : '',
+      ...methods.map(m => {
+        const v = (methodScores(m) || {})[mt.key];
+        return v === undefined ? 'NA' : v;
+      }),
+    ]);
+  }
+  const csv = af3TableNotice(methods) + rows.map(r => r.map(csvCell).join(',')).join('\n');
+  downloadBlob(new Blob([csv], { type: 'text/csv' }),
+               sanitizeFilename(`${selectedEntry.identifier}_scores`) + '.csv');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeScorePanel();
+});
+document.getElementById('score-overlay').addEventListener('click', e => {
+  if (e.target.id === 'score-overlay') closeScorePanel();
+});
+
+
+// ── Sidebar tabs ──────────────────────────────────────────────────────────────
+// The sidebar carries four separate jobs — finding a pair, choosing a
+// prediction, drawing it, and reading its annotation. One pane each keeps every
+// one of them a short scroll instead of a single very long one.
+const SIDEBAR_TABS = ['browse', 'model', 'display', 'details'];
+
+function setSidebarTab(name) {
+  for (const t of SIDEBAR_TABS) {
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+    document.getElementById('pane-' + t).classList.toggle('active', t === name);
+  }
+  document.querySelector('.sidebar-body').scrollTop = 0;
+}
+
+function toggleFilters() {
+  const sec = document.getElementById('filter-section');
+  const btn = document.getElementById('filters-toggle');
+  const collapsed = sec.classList.toggle('collapsed');
+  btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+}
+
+// Keeps the pinned header in sync, so the other three tabs still say which pair
+// they are about.
+function updateSelectedBar(e) {
+  const bar = document.getElementById('selected-bar');
+  if (!e) { bar.style.display = 'none'; return; }
+  bar.style.display = 'block';
+  document.getElementById('sel-name').textContent = entryLabel(e);
+  document.getElementById('sel-sub').textContent = entrySub(e);
+}
+
+
+// Names the structure in the viewer, and warns when the sidebar selection has
+// moved on from it — otherwise the Display tab silently describes one pair
+// while the viewer shows another.
+function updateShowingBar() {
+  const bar = document.getElementById('showing-bar');
+  if (!bar) return;
+  if (!loadedStructure) {
+    bar.className = 'showing-bar';
+    bar.textContent = 'No structure loaded yet.';
+    return;
+  }
+  const { entry, label } = loadedStructure;
+  const stale = selectedEntry && selectedEntry.identifier !== entry.identifier;
+  bar.className = 'showing-bar' + (stale ? ' stale' : '');
+  bar.innerHTML = `Showing <b>${escapeHtml(entryLabel(entry))}</b> · ${escapeHtml(label)}` +
+    (stale ? '<br>Selection has moved to another interaction — load it to update the view.' : '');
+}
+
+
+// ── Help & feedback ───────────────────────────────────────────────────────────
+const REPO_URL = 'https://github.com/AAGI-AUS/3dmol-viewer-ccdm';
+
+// A question about "this structure" is only answerable if it is named, so the
+// new-issue form is pre-filled with whatever the viewer is showing.
+function issueContext() {
+  if (!loadedStructure) return null;
+  const { entry, label } = loadedStructure;
+  return [
+    `- Interaction: ${entryLabel(entry)} (\`${entry.identifier}\`)`,
+    `- Species: ${entrySub(entry)}`,
+    `- Prediction: ${label}`,
+  ].join('\n');
+}
+
+function openHelp() {
+  const context = issueContext();
+  const body = context
+    ? `\n\n---\nOpened from the PPI viewer, showing:\n${context}\n`
+    : '';
+  document.getElementById('help-new-issue').href =
+    REPO_URL + '/issues/new' + (body ? '?body=' + encodeURIComponent(body) : '');
+  document.getElementById('help-context').textContent = context
+    ? 'The issue will be pre-filled with the structure you are viewing — ' +
+      `${entryLabel(loadedStructure.entry)}, ${loadedStructure.label}. ` +
+      'You can delete that from the form if it is not relevant.'
+    : 'Load a structure first if your question is about a particular structure — the issue is then pre-filled with which one.';
+  document.getElementById('help-overlay').classList.add('open');
+}
+
+function closeHelp() {
+  document.getElementById('help-overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeHelp(); });
+document.getElementById('help-overlay').addEventListener('click', e => {
+  if (e.target.id === 'help-overlay') closeHelp();
+});
+
+// ── AlphaFold 3 terms of use (issue #27) ──────────────────────────────────────
+// The notice wording comes from section 5 of the AlphaFold 3 Output Terms of Use.
+// A .cif export already carries the notice in its header, but images, videos and
+// score tables would lose it without the additions below.
+const AF3_TERMS_URL = 'https://github.com/google-deepmind/alphafold3/blob/main/OUTPUT_TERMS_OF_USE.md';
+const AF3_NOTICE = `By using this information, you agree to AlphaFold 3 Output Terms of Use found at ${AF3_TERMS_URL}.`;
+const AF3_CAPTION = 'AlphaFold 3 prediction (Abramson et al., Nature 2024). Non-commercial use only. '
+  + `By using this information, you agree to AlphaFold 3 Output Terms of Use found at ${AF3_TERMS_URL}.`;
+
+function isAf3Loaded() {
+  return !!loadedStructure && loadedStructure.method === 'af3';
+}
+
+function updateAf3Notice() {
+  document.getElementById('af3-notice').classList.toggle('visible', isAf3Loaded());
+}
+
+// A canvas with room for the frame plus a caption band underneath it, so the
+// caption never covers any of the structure. The band is painted once; the
+// caller draws the frame into the top width x height of the canvas.
+function af3CaptionedCanvas(width, height) {
+  const font = Math.max(11, Math.round(width / 90));
+  const lineHeight = Math.round(font * 1.4);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = `${font}px sans-serif`;
+
+  const lines = [];
+  let line = '';
+  for (const word of AF3_CAPTION.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > width - font * 2) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  lines.push(line);
+
+  // Video encoders reject odd frame heights.
+  const total = height + lineHeight * lines.length + font;
+  canvas.width = width;
+  canvas.height = total + (total % 2);
+
+  // Resizing a canvas resets its context, so the font has to be set again.
+  ctx.fillStyle = '#0f1117';
+  ctx.fillRect(0, height, width, canvas.height - height);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = `${font}px sans-serif`;
+  ctx.textBaseline = 'top';
+  lines.forEach((l, i) => ctx.fillText(l, font, height + font / 2 + i * lineHeight));
+  return { canvas, ctx };
+}
+
+// Score tables mix methods, so the notice goes in whenever AlphaFold 3 is one of them.
+function af3TableNotice(methods) {
+  if (!methods.includes('af3')) return '';
+  return [
+    '# AlphaFold 3 values below are for non-commercial use only. Cite Abramson et al., Nature (2024).',
+    `# ${AF3_NOTICE}`,
+  ].join('\n') + '\n';
+}
+
+function openTerms() {
+  document.getElementById('terms-overlay').classList.add('open');
+}
+
+function closeTerms() {
+  document.getElementById('terms-overlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTerms(); });
+document.getElementById('terms-overlay').addEventListener('click', e => {
+  if (e.target.id === 'terms-overlay') closeTerms();
+});
 
 // ── Auto-login if token in session ────────────────────────────────────────────
 if (token) showApp();

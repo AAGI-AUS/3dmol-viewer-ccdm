@@ -1,15 +1,43 @@
 {
-  "name": "3dmol-viewer",
+  "name": "3dmol-viewer-ccdm",
   "version": "1.0.0",
-  "description": "3Dmol.js AlphaFold Multimer protein structure viewer",
+  "description": "Web-based protein structure viewer for effector–host interaction predictions with support for multiple structure prediction methods",
   "license": "BSD-3-Clause",
+  "author": {
+    "name": "Kristina Gagalova",
+    "email": "kristina.gagalova@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AAGI-AUS/3dmol-viewer-ccdm.git"
+  },
+  "keywords": [
+    "protein-structure",
+    "visualization",
+    "alphafold",
+    "structure-prediction",
+    "3dmol",
+    "web-viewer"
+  ],
+  "homepage": "https://github.com/AAGI-AUS/3dmol-viewer-ccdm#readme",
+  "bugs": {
+    "url": "https://github.com/AAGI-AUS/3dmol-viewer-ccdm/issues"
+  },
   "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "lint": "echo 'Add ESLint configuration to run linting'",
+    "test": "echo 'Add test suite'",
+    "dev": "node server.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2"
-  }
+  },
+  "devDependencies": {}
 }
+
