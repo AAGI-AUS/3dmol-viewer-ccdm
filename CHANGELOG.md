@@ -16,7 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changes to existing functionality in development
 
 ### Fixed
-- Bug fixes in development
+- AlphaFold 3 now shows the top-ranked model instead of always showing `seed-1_sample-0`,
+  so the structure matches the scores shown beside it (#28)
+- Chai-1 now shows its top model (highest `aggregate_score`) instead of always showing
+  `pred.model_idx_0`, for the same reason (#28)
 
 ### Deprecated
 - Features that will be removed in a future release

@@ -1206,15 +1206,15 @@
       <li>Values rounded for display</li>
       <li>A caption on exported images and videos, and a notice at the top of exported score tables</li>
     </ul>
-    <p>Only one of the five samples from each run is shown, and the other samples are not distributed.</p>
+    <p>Only the highest-ranked of the five samples from each run is shown, and the other samples are not distributed.</p>
 
     <h4>Prediction details</h4>
     <ul>
       <li><b>Software:</b> AlphaFold 3 version 3.0.1, model AlphaFold-beta-20231127</li>
       <li><b>Run dates:</b> 29 April to 3 May 2026</li>
       <li><b>Configuration:</b> one seed (1) and five samples per pair, with unpaired MSAs, paired MSAs and templates as input</li>
-      <li><b>Structure shown:</b> seed 1, sample 0, which is not always the highest-ranked of the five samples</li>
-      <li><b>Scores shown:</b> pTM and ipTM come from the highest-ranked sample of the run, so they can differ from the values for sample 0</li>
+      <li><b>Structure shown:</b> the highest-ranked of the five samples, by AlphaFold 3's ranking score</li>
+      <li><b>Scores shown:</b> pTM, ipTM and fraction disordered are the values for the structure shown</li>
       <li><b>Confidence metrics:</b> per-atom pLDDT, stored in the B-factor column of the structure file, plus pTM, ipTM and fraction disordered</li>
     </ul>
   </div>
