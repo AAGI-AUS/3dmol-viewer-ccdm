@@ -4,7 +4,8 @@
 // Runs on the VM next to the raw prediction output. Of the ~713 GB under
 // INPUT_DATA_DIR the viewer only ever reads one structure file per
 // (interaction, method) — model 0, see issue #21 — plus the metadata TSV. This
-// script resolves those files with the same rules as server.js, copies them to
+// script resolves those files with the same rules as server.js (top-ranked
+// model for AF3 and Chai-1, issue #28), copies them to
 // OUT_DIR/structures/<method>/<identifier>/model_0.<ext>, and writes:
 //
 //   OUT_DIR/entries.json     metadata rows, shaped exactly as server.js serves them
@@ -14,6 +15,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 
 const INPUT_DATA_DIR = process.argv[2] || process.env.INPUT_DATA_DIR || '/mnt/structures-server/input_data';
 const OUT_DIR = process.argv[3] || process.env.OUT_DIR || '/mnt/3dmol/cloud_export';
@@ -184,11 +186,63 @@ const ID_ALIASES = {
 };
 const diskIdOf = id => ID_ALIASES[id] || id;
 
+// Read one scalar array from a NumPy .npz file (a zip of .npy files) without
+// a zip library — same as server.js (issue #28).
+function readNpzScalar(file, member) {
+  const buf = fs.readFileSync(file);
+  let p = 0;
+  while (p + 30 <= buf.length && buf.readUInt32LE(p) === 0x04034b50) {
+    const method = buf.readUInt16LE(p + 8);
+    const compSize = buf.readUInt32LE(p + 18);
+    const nameLen = buf.readUInt16LE(p + 26);
+    const extraLen = buf.readUInt16LE(p + 28);
+    const name = buf.toString('utf8', p + 30, p + 30 + nameLen);
+    const start = p + 30 + nameLen + extraLen;
+    if (name === member) {
+      let npy = buf.subarray(start);
+      if (method === 8) npy = zlib.inflateRawSync(npy);
+      else if (method !== 0) return null;
+      const major = npy[6];
+      const hlen = major === 1 ? npy.readUInt16LE(8) : npy.readUInt32LE(8);
+      const off = (major === 1 ? 10 : 12) + hlen;
+      const header = npy.toString('latin1', major === 1 ? 10 : 12, off);
+      if (header.includes("'<f4'")) return npy.readFloatLE(off);
+      if (header.includes("'<f8'")) return npy.readDoubleLE(off);
+      return null;
+    }
+    if (compSize === 0xffffffff) return null;
+    p = start + compSize;
+  }
+  return null;
+}
+
+// Chai-1 numbers models in sampling order; serve the one with the highest
+// aggregate_score, as server.js does (issue #28).
+function chaiBestModelIndex(dir) {
+  let best = null;
+  for (let n = 0; n <= 4; n++) {
+    const scores = path.join(dir, `scores.model_idx_${n}.npz`);
+    if (!fs.existsSync(scores)) continue;
+    let score = null;
+    try { score = readNpzScalar(scores, 'aggregate_score.npy'); } catch { /* unreadable */ }
+    if (score === null) { console.warn(`[chai] could not read aggregate_score from ${scores}`); continue; }
+    if (best === null || score > best.score) best = { n, score };
+  }
+  return best ? best.n : 0;
+}
+
+// Same files server.js serves as model 0. AF3 and Chai pick their top-ranked
+// sample (issue #28); AFM's ranked_0 is already ranked; Boltz-2 and ESMFold2
+// write a single model.
 const RESOLVERS = {
-  af3: id => ({ file: path.join(METHOD_DIRS.af3, id, 'seed-1_sample-0', `${id}_seed-1_sample-0_model.cif`), format: 'cif' }),
+  af3: id => ({ file: path.join(METHOD_DIRS.af3, id, `${id}_model.cif`), format: 'cif' }),
   afm: id => { const d = diskIdOf(id); return { file: path.join(METHOD_DIRS.afm, d, d, 'ranked_0.pdb'), format: 'pdb' }; },
   boltz2: id => { const d = diskIdOf(id); return { file: path.join(METHOD_DIRS.boltz2, `${d}.yaml`, `boltz_results_${d}`, 'predictions', d, `${d}_model_0.cif`), format: 'cif' }; },
-  chai: id => { const d = diskIdOf(id); return { file: path.join(METHOD_DIRS.chai, 'models', d, 'pred.model_idx_0.cif'), format: 'cif' }; },
+  chai: id => {
+    const dir = path.join(METHOD_DIRS.chai, 'models', diskIdOf(id));
+    const n = fs.existsSync(dir) ? chaiBestModelIndex(dir) : 0;
+    return { file: path.join(dir, `pred.model_idx_${n}.cif`), format: 'cif' };
+  },
   esmfold2: id => { const d = diskIdOf(id); return { file: path.join(METHOD_DIRS.esmfold2, d, `${d}_structure.cif`), format: 'cif' }; },
 };
 
