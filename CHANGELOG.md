@@ -7,28 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-19
+
 ### Added
+- Export from the viewer: images, video, structure files and FASTA, with a save
+  dialog where the browser supports it and a ZIP fallback where it doesn't (#5)
+- Multi-select plant and pathogen species filters, and a Clear Filters button (#4, #10)
+- Prediction scores for every method, with a comparison table grouped into
+  global, interface and per-chain metrics, and an Extended tab for the raw
+  per-direction values (#12, #22)
+- Copy FASTA buttons for each chain in the sequence panel (#17)
+- Light and dark themes with colour-blind-safe palettes (#19)
+- Sequence tracks coloured by pLDDT when pLDDT colouring is on (#25)
 - AlphaFold 3 terms of use: a notice in the viewer, a terms panel, hosted copies of the
   Output Terms of Use and the Legally Binding Terms of Use, and the notice on exported
   images, videos and score tables (#27)
+- Help button pointing questions and requests to the repository issues
 
 ### Changed
-- Changes to existing functionality in development
+- Chain A is labelled as the effector and chain B as the target throughout (#8)
+- Only the best-ranked model of each method is served; the model selector is gone (#21)
+- The sequence panel is shown by default and follows the interface highlight (#12)
 
 ### Fixed
 - AlphaFold 3 now shows the top-ranked model instead of always showing `seed-1_sample-0`,
   so the structure matches the scores shown beside it (#28)
 - Chai-1 now shows its top model (highest `aggregate_score`) instead of always showing
   `pred.model_idx_0`, for the same reason (#28)
-
-### Deprecated
-- Features that will be removed in a future release
-
-### Removed
-- Features that have been removed
-
-### Security
-- Security vulnerability fixes
+- Species filter selections no longer reset silently (#4)
+- Exported files keep their names instead of downloading as "Unconfirmed" or `.txt` (#5)
 
 ## [1.0.0] - 2026-08-29
 
