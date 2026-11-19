@@ -7,6 +7,8 @@
 //                row-level security decides access, cached briefly per isolate
 //   file index → Supabase table `structures` (replaces existsSync on disk)
 //   files      → R2 bucket bound as STRUCTURES
+//   requests   → POST /api/access-request (CAPTCHA-checked) into
+//                `access_requests`; the only route using the service key
 // Anything that is not /api/* is a static asset from public/.
 
 import { createRemoteJWKSet, jwtVerify, decodeProtectedHeader } from 'jose';
@@ -110,15 +112,75 @@ async function readStructure(env, data, method, id, model) {
   return { entry, obj };
 }
 
+// ── Access requests ──────────────────────────────────────────────────────────
+// The one write the public can make: a request for an account, stored for you
+// to review (see cloud/supabase/access-requests.sql). The CAPTCHA is checked
+// here, which is why the insert goes through the Worker with the service key
+// rather than straight from the browser. The reply is the same whether the
+// address is new, already pending, or already has an account, so the form
+// can't be used to find out who has access.
+const LIMITS = { name: 200, email: 320, institution: 300, reason: 2000 };
+
+async function handleAccessRequest(request, env) {
+  if (!env.TURNSTILE_SECRET || !env.SUPABASE_SERVICE_KEY) return fail(503, 'Access requests are not enabled');
+  if (Number(request.headers.get('Content-Length') || 0) > 16_384) return fail(413, 'Request too large');
+
+  let body;
+  try { body = await request.json(); } catch { return fail(400, 'Invalid request'); }
+  const fields = {};
+  for (const [k, max] of Object.entries(LIMITS)) {
+    const v = typeof body[k] === 'string' ? body[k].trim() : '';
+    if (!v) return fail(400, `Please fill in ${k === 'reason' ? 'why you need access' : k}`);
+    if (v.length > max) return fail(400, `${k[0].toUpperCase() + k.slice(1)} is too long`);
+    fields[k] = v;
+  }
+  fields.email = fields.email.toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(fields.email)) return fail(400, 'Please enter a valid email address');
+
+  const form = new FormData();
+  form.append('secret', env.TURNSTILE_SECRET);
+  form.append('response', String(body.turnstileToken || ''));
+  const ip = request.headers.get('CF-Connecting-IP');
+  if (ip) form.append('remoteip', ip);
+  const check = await (await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form })).json();
+  if (!check.success) return fail(400, 'The verification check failed — please try again');
+
+  const r = await fetch(`${env.SUPABASE_URL}/rest/v1/access_requests`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(fields),
+  });
+  // 409 = a request from this address is already pending; answer as if new.
+  if (!r.ok && r.status !== 409) {
+    console.error('access request insert failed', r.status, await r.text());
+    return fail(500, 'Could not save your request — please try again later');
+  }
+  return json({ ok: true });
+}
+
 // ── Router ───────────────────────────────────────────────────────────────────
 async function handleApi(request, env, url) {
   const parts = url.pathname.split('/').slice(2).map(decodeURIComponent); // after "/api"
 
   if (parts[0] === 'config' && parts.length === 1) {
-    return json({ auth: 'supabase', supabaseUrl: env.SUPABASE_URL, supabaseAnonKey: env.SUPABASE_ANON_KEY },
-      200, { 'Cache-Control': 'public, max-age=300' });
+    return json({
+      auth: 'supabase',
+      supabaseUrl: env.SUPABASE_URL,
+      supabaseAnonKey: env.SUPABASE_ANON_KEY,
+      accessRequests: Boolean(env.TURNSTILE_SITE_KEY && env.TURNSTILE_SECRET && env.SUPABASE_SERVICE_KEY),
+      turnstileSiteKey: env.TURNSTILE_SITE_KEY || null,
+    }, 200, { 'Cache-Control': 'public, max-age=300' });
   }
   if (parts[0] === 'login') return fail(410, 'Sign in with your email address instead');
+  if (parts[0] === 'access-request' && parts.length === 1) {
+    if (request.method !== 'POST') return fail(405, 'Method not allowed');
+    return handleAccessRequest(request, env);
+  }
   if (request.method !== 'GET') return fail(405, 'Method not allowed');
 
   const auth = request.headers.get('Authorization') || '';

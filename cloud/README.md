@@ -62,12 +62,36 @@ npx wrangler deploy
 ```
 
 `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `wrangler.jsonc` are public values
-(the anon key grants nothing until a user signs in).
+(the anon key grants nothing until a user signs in). Secrets, set with
+`npx wrangler secret put <NAME>`: `SUPABASE_SERVICE_KEY` and `TURNSTILE_SECRET`,
+used only by the access-request form.
 
 ## Managing users
 
 Supabase dashboard → Authentication → Users → **Invite user**. Remove access by
 deleting the user there; their current session ends within an hour.
+
+### Access requests
+
+People without an account can click **No account? Request access** on the
+login page and send their name, email, institution and reason. The form has a
+Cloudflare Turnstile check; the Worker verifies it and stores the request in
+the `access_requests` table (`supabase/access-requests.sql`).
+
+To review: Supabase dashboard → Table Editor → `access_requests`, and set
+`status` to `approved` or `rejected`. Approving sends the invite email from
+the database itself (trigger + `pg_net`), using the service key and project
+URL stored in Supabase Vault as `service_role_key` / `project_url`. If the
+service key is ever rotated, update that Vault secret and the Worker secret.
+`access_request_invites` shows the invite call's HTTP result for a few hours.
+
+The form only appears when the Worker has `TURNSTILE_SITE_KEY` (var),
+`TURNSTILE_SECRET` and `SUPABASE_SERVICE_KEY` (secrets). This is the one
+route that uses the service key; nothing else in the Worker does.
+
+**Email:** Supabase's built-in mailer only delivers to members of the
+Supabase team and is limited to 2 emails an hour, so invites to outside
+applicants need a custom SMTP provider (Authentication → Emails → SMTP).
 
 ## Testing
 

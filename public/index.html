@@ -172,6 +172,16 @@
   .forgot-link { display: block; margin-top: 10px; text-align: center; font-size: 0.8rem; color: var(--accent-2); background: none; border: none; cursor: pointer; width: 100%; }
   .forgot-link:hover { text-decoration: underline; }
   #set-password-form { display: none; }
+  #request-form { display: none; }
+  .field textarea {
+    width: 100%; padding: 10px 14px; background: var(--bg-sunken);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+    font: inherit; font-size: 0.95rem; outline: none; resize: vertical; min-height: 84px;
+  }
+  .field textarea:focus { border-color: var(--accent); }
+  .login-card.wide { width: 440px; }
+  #turnstile-box { min-height: 65px; margin: 4px 0 4px; }
+  @media (max-width: 480px) { .login-card, .login-card.wide { width: calc(100vw - 32px); padding: 28px 20px; } }
 
   /* ── Main app ── */
   #app { display: none; height: 100vh; }
@@ -825,6 +835,7 @@
       </div>
       <button class="login-btn" onclick="login()">Sign In</button>
       <button class="forgot-link" id="forgot-link" onclick="forgotPassword()" hidden>Forgot password?</button>
+      <button class="forgot-link" id="request-link" onclick="showRequestForm(true)" hidden>No account? Request access</button>
     </div>
     <!-- Shown after following an invite or password-reset email (cloud sign-in only) -->
     <div id="set-password-form">
@@ -837,6 +848,28 @@
         <input type="password" id="new-password-2" autocomplete="new-password" minlength="8">
       </div>
       <button class="login-btn" onclick="setNewPassword()">Set password</button>
+    </div>
+    <!-- Request an account (cloud sign-in only) -->
+    <div id="request-form">
+      <div class="field">
+        <label for="req-name">Name</label>
+        <input type="text" id="req-name" autocomplete="name" maxlength="200">
+      </div>
+      <div class="field">
+        <label for="req-email">Email</label>
+        <input type="email" id="req-email" autocomplete="email" maxlength="320">
+      </div>
+      <div class="field">
+        <label for="req-institution">Institution</label>
+        <input type="text" id="req-institution" autocomplete="organization" maxlength="300">
+      </div>
+      <div class="field">
+        <label for="req-reason">Why do you need access?</label>
+        <textarea id="req-reason" maxlength="2000"></textarea>
+      </div>
+      <div id="turnstile-box"></div>
+      <button class="login-btn" id="req-submit" onclick="submitAccessRequest()">Send request</button>
+      <button class="forgot-link" onclick="showRequestForm(false)">Back to sign in</button>
     </div>
     <div class="error-msg" id="login-error"></div>
     <div class="info-msg" id="login-info"></div>
@@ -1385,6 +1418,10 @@ const authReady = (async () => {
   userEl.autocomplete = 'email';
   userEl.placeholder = 'you@example.org';
   document.getElementById('forgot-link').hidden = false;
+  if (cfg.accessRequests && cfg.turnstileSiteKey) {
+    turnstileSiteKey = cfg.turnstileSiteKey;
+    document.getElementById('request-link').hidden = false;
+  }
 
   supa.auth.onAuthStateChange((event, session) => {
     token = session ? session.access_token : null;
@@ -1394,6 +1431,86 @@ const authReady = (async () => {
   token = data.session ? data.session.access_token : null;
   if (token && arrivedViaInvite) showSetPasswordForm(true);
 })();
+
+// ── Access requests ──────────────────────────────────────────────────────────
+// People without an account apply here; requests are reviewed in Supabase and
+// approving one sends the invite. Turnstile (Cloudflare's CAPTCHA) is loaded
+// only when the form is opened.
+let turnstileSiteKey = null;
+let turnstileWidget = null;
+let turnstileLoading = null;
+
+function loadTurnstile() {
+  turnstileLoading = turnstileLoading || new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.async = true;
+    s.onload = resolve;
+    s.onerror = () => { turnstileLoading = null; reject(new Error('turnstile')); };
+    document.head.appendChild(s);
+  });
+  return turnstileLoading;
+}
+
+async function showRequestForm(on) {
+  document.getElementById('sign-in-form').style.display = on ? 'none' : '';
+  document.getElementById('request-form').style.display = on ? 'block' : 'none';
+  document.querySelector('.login-card').classList.toggle('wide', on);
+  document.getElementById('login-error').textContent = '';
+  document.getElementById('login-info').textContent = '';
+  if (!on) return;
+  const typed = document.getElementById('username').value.trim();
+  if (typed && !document.getElementById('req-email').value) document.getElementById('req-email').value = typed;
+  document.getElementById('req-name').focus();
+  try {
+    await loadTurnstile();
+    if (turnstileWidget === null) {
+      turnstileWidget = window.turnstile.render('#turnstile-box', {
+        sitekey: turnstileSiteKey,
+        theme: themeMode === 'light' ? 'light' : 'dark',
+      });
+    }
+  } catch {
+    document.getElementById('login-error').textContent = 'Could not load the verification check — please reload the page.';
+  }
+}
+
+async function submitAccessRequest() {
+  const errEl = document.getElementById('login-error');
+  const infoEl = document.getElementById('login-info');
+  const btn = document.getElementById('req-submit');
+  errEl.textContent = ''; infoEl.textContent = '';
+  const val = id => document.getElementById(id).value.trim();
+  const payload = {
+    name: val('req-name'), email: val('req-email'),
+    institution: val('req-institution'), reason: val('req-reason'),
+    turnstileToken: window.turnstile && turnstileWidget !== null ? window.turnstile.getResponse(turnstileWidget) : '',
+  };
+  if (!payload.name || !payload.email || !payload.institution || !payload.reason) {
+    errEl.textContent = 'Please fill in every field'; return;
+  }
+  if (!payload.turnstileToken) { errEl.textContent = 'Please complete the verification check'; return; }
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/access-request', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      errEl.textContent = data.error || 'Could not send your request';
+      if (window.turnstile && turnstileWidget !== null) window.turnstile.reset(turnstileWidget);
+      return;
+    }
+    for (const id of ['req-name', 'req-email', 'req-institution', 'req-reason']) document.getElementById(id).value = '';
+    if (window.turnstile && turnstileWidget !== null) window.turnstile.reset(turnstileWidget);
+    showRequestForm(false);
+    infoEl.textContent = 'Thanks — your request has been sent. If it is approved you will get an email invitation to set a password.';
+  } catch {
+    errEl.textContent = 'Connection error';
+  } finally {
+    btn.disabled = false;
+  }
+}
 
 async function forgotPassword() {
   const email = document.getElementById('username').value.trim();
