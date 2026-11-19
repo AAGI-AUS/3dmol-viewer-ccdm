@@ -13,11 +13,13 @@
   "r2_buckets": [
     { "binding": "STRUCTURES", "bucket_name": "ppi-structures" }
   ],
-  // Both values are public by design: the anon/publishable key only grants
-  // what row-level security allows, which is nothing until a user signs in.
+  // All public by design: the anon key only grants what row-level security
+  // allows (nothing until a user signs in), and the Turnstile site key is
+  // meant to be embedded in the page. Secrets: see cloud/README.md.
   "vars": {
     "SUPABASE_URL": "https://huvtngavcatlbqwltvco.supabase.co",
-    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1dnRuZ2F2Y2F0bGJxd2x0dmNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUwNjA3OTksImV4cCI6MjExMDYzNjc5OX0.GeaBh9izvGB0-VubbQuD4fdwpySDxuyGjp80Tg_XYkM"
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1dnRuZ2F2Y2F0bGJxd2x0dmNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUwNjA3OTksImV4cCI6MjExMDYzNjc5OX0.GeaBh9izvGB0-VubbQuD4fdwpySDxuyGjp80Tg_XYkM",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAGINI40u1YVO1juh"
   },
   "observability": { "enabled": true }
 }
