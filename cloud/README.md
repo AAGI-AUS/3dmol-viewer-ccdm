@@ -66,6 +66,20 @@ npx wrangler deploy
 `npx wrangler secret put <NAME>`: `SUPABASE_SERVICE_KEY` and `TURNSTILE_SECRET`,
 used only by the access-request form.
 
+## Public demo
+
+https://ppi-viewer.ppi-viewer-ccdm.workers.dev/demo opens the viewer without
+signing in, limited to a few interactions, with a banner offering **Request
+full access** and **Sign in**. The login page also has **Explore the demo**.
+
+Which interactions are in the demo is the `demo` column of `entries` — tick or
+untick it in the Table Editor; the site picks it up within five minutes. The
+limit is enforced by row-level security (`supabase/demo.sql`): requests with
+no Authorization header are read as the anon role, which can only see demo
+rows and their structures. An invalid token is still refused, never served
+the demo. Current demo: AVR-Pik/OsHIPP19-HMA, APikL2/sHMA25, Cmu1/ZmKWL1,
+Pi04314/StPP1c, AvrSr35/Sr35.
+
 ## Managing users
 
 Supabase dashboard → Authentication → Users → **Invite user**. Remove access by

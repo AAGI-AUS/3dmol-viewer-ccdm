@@ -52,7 +52,10 @@ async function verifyToken(token, env) {
 }
 
 // ── Data from Supabase ───────────────────────────────────────────────────────
-const cache = { entries: null, structures: null, until: 0 };
+// One cache per audience. Signed-in users see everything; anonymous demo
+// visitors see only what row-level security lets the anon key read (rows with
+// entries.demo). The two must never share a cache entry.
+const dataCaches = { full: {}, demo: {} };
 
 async function restSelect(env, token, table, select) {
   const r = await fetch(`${env.SUPABASE_URL}/rest/v1/${table}?select=${select}`, {
@@ -62,7 +65,8 @@ async function restSelect(env, token, table, select) {
   return r.json();
 }
 
-async function loadData(env, token) {
+async function loadData(env, token, audience) {
+  const cache = dataCaches[audience];
   if (cache.entries && cache.until > Date.now()) return cache;
   const [entryRows, structureRows] = await Promise.all([
     restSelect(env, token, 'entries', 'data'),
@@ -72,6 +76,25 @@ async function loadData(env, token) {
   cache.structures = new Map(structureRows.map(s => [`${s.method}|${s.identifier}|${s.model}`, s]));
   cache.until = Date.now() + CACHE_TTL_MS;
   return cache;
+}
+
+// Public totals for the demo banner ("5 of 147"); see entry_counts() in demo.sql.
+let countsCache = { value: null, until: 0 };
+async function entryCounts(env) {
+  if (countsCache.value && countsCache.until > Date.now()) return countsCache.value;
+  try {
+    const r = await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/entry_counts`, {
+      method: 'POST',
+      headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${env.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    countsCache = { value: await r.json(), until: Date.now() + CACHE_TTL_MS };
+  } catch (err) {
+    console.error('entry_counts failed', err);
+    return countsCache.value || { total: 0, demo: 0 };
+  }
+  return countsCache.value;
 }
 
 // ── Metadata routes (logic as in server.js) ──────────────────────────────────
@@ -168,7 +191,9 @@ async function handleApi(request, env, url) {
   const parts = url.pathname.split('/').slice(2).map(decodeURIComponent); // after "/api"
 
   if (parts[0] === 'config' && parts.length === 1) {
+    const counts = await entryCounts(env);
     return json({
+      demo: counts.demo > 0 ? { count: counts.demo, total: counts.total } : null,
       auth: 'supabase',
       supabaseUrl: env.SUPABASE_URL,
       supabaseAnonKey: env.SUPABASE_ANON_KEY,
@@ -183,12 +208,23 @@ async function handleApi(request, env, url) {
   }
   if (request.method !== 'GET') return fail(405, 'Method not allowed');
 
-  const auth = request.headers.get('Authorization') || '';
-  if (!auth.startsWith('Bearer ')) return fail(401, 'Unauthorized');
-  const token = auth.slice(7);
-  try { await verifyToken(token, env); } catch { return fail(401, 'Invalid or expired token'); }
+  // No Authorization header at all = a demo visitor: read as the anon role, so
+  // the database hands back only the demo interactions. A header that is
+  // present but invalid is still a 401 — an expired session shouldn't
+  // silently shrink to the demo.
+  const auth = request.headers.get('Authorization');
+  let token, audience;
+  if (auth === null) {
+    token = env.SUPABASE_ANON_KEY;
+    audience = 'demo';
+  } else {
+    if (!auth.startsWith('Bearer ')) return fail(401, 'Unauthorized');
+    token = auth.slice(7);
+    try { await verifyToken(token, env); } catch { return fail(401, 'Invalid or expired token'); }
+    audience = 'full';
+  }
 
-  const data = await loadData(env, token);
+  const data = await loadData(env, token, audience);
   const [section, a, b, c, d] = parts;
 
   if (section === 'metadata') {
@@ -250,6 +286,10 @@ export default {
         return fail(500, 'Internal error');
       }
     }
+    // Shareable demo link: /demo is the same page, which switches itself into
+    // demo mode from the path. /demo/ would break the page's relative URLs.
+    if (url.pathname === '/demo/') return Response.redirect(`${url.origin}/demo${url.search}`, 301);
+    if (url.pathname === '/demo') return env.ASSETS.fetch(new Request(`${url.origin}/`, request));
     return env.ASSETS.fetch(request);
   },
 };

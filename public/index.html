@@ -206,6 +206,24 @@
   }
   .logout-btn:hover { color: var(--danger); border-color: var(--danger); }
 
+  /* Public demo (cloud only): banner in the sidebar, entry button on login */
+  .demo-banner {
+    display: none; padding: 12px 20px; border-bottom: 1px solid var(--border);
+    background: var(--bg-sunken); font-size: 0.8rem; color: var(--text-muted); line-height: 1.45;
+  }
+  .demo-banner.visible { display: block; }
+  .demo-banner b { color: var(--text-hi); }
+  .demo-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .demo-actions button {
+    flex: 1; padding: 6px 8px; border-radius: 6px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border); background: none; color: var(--text);
+  }
+  .demo-actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .demo-actions button.primary:hover { background: var(--accent-hover); }
+  .demo-actions button:not(.primary):hover { border-color: var(--accent); }
+  .login-btn.secondary { background: none; border: 1px solid var(--border); color: var(--text); margin-top: 14px; }
+  .login-btn.secondary:hover { background: none; border-color: var(--accent); }
+
   .sidebar-body { flex: 1; overflow-y: auto; padding: 16px; }
 
   .section-label {
@@ -838,6 +856,7 @@
       <button class="login-btn" onclick="login()">Sign In</button>
       <button class="forgot-link" id="forgot-link" onclick="forgotPassword()" hidden>Forgot password?</button>
       <button class="forgot-link" id="request-link" onclick="showRequestForm(true)" hidden>No account? Request access</button>
+      <button class="login-btn secondary" id="demo-btn" onclick="enterDemo()" hidden>Explore the demo</button>
     </div>
     <!-- Shown after following an invite or password-reset email (cloud sign-in only) -->
     <div id="set-password-form">
@@ -890,7 +909,15 @@
       <div class="sidebar-header-actions">
         <button class="help-btn" onclick="openTerms()" title="AlphaFold 3 terms of use">§</button>
         <button class="help-btn" onclick="openHelp()" title="Help &amp; feedback">?</button>
-        <button class="logout-btn" onclick="logout()">Logout</button>
+        <button class="logout-btn" id="logout-btn" onclick="logout()">Logout</button>
+      </div>
+    </div>
+    <div class="demo-banner" id="demo-banner">
+      <b>Demo</b> — showing <b id="demo-count">0</b> of <b id="demo-total">0</b> curated
+      effector–host interactions, each predicted with five structure prediction methods.
+      <div class="demo-actions">
+        <button class="primary" onclick="leaveDemo(true)">Request full access</button>
+        <button onclick="leaveDemo(false)">Sign in</button>
       </div>
     </div>
 
@@ -1420,6 +1447,10 @@ const authReady = (async () => {
   userEl.autocomplete = 'email';
   userEl.placeholder = 'you@example.org';
   document.getElementById('forgot-link').hidden = false;
+  if (cfg.demo && cfg.demo.count > 0) {
+    demoInfo = cfg.demo;
+    document.getElementById('demo-btn').hidden = false;
+  }
   if (cfg.accessRequests && cfg.turnstileSiteKey) {
     turnstileSiteKey = cfg.turnstileSiteKey;
     document.getElementById('request-link').hidden = false;
@@ -1568,7 +1599,40 @@ async function login() {
   }
 }
 
+// ── Public demo ───────────────────────────────────────────────────────────────
+// The cloud deployment can open a few interactions to anyone. In demo mode the
+// API is called with no Authorization header, and the server answers with the
+// demo interactions only. /demo is the shareable link straight into it.
+let demoMode = false;
+let demoInfo = null;   // { count, total } from /api/config, when a demo exists
+
+function authHeaders() {
+  return demoMode ? {} : { Authorization: `Bearer ${token}` };
+}
+
+function enterDemo() {
+  if (!demoInfo) return;
+  demoMode = true;
+  document.getElementById('demo-count').textContent = demoInfo.count;
+  document.getElementById('demo-total').textContent = demoInfo.total;
+  document.getElementById('demo-banner').classList.add('visible');
+  document.getElementById('logout-btn').textContent = 'Sign in';
+  if (location.pathname !== '/demo') history.replaceState(null, '', '/demo');
+  showApp();
+}
+
+function leaveDemo(toRequestForm) {
+  logout();
+  if (toRequestForm) showRequestForm(true);
+}
+
 function logout() {
+  if (demoMode) {
+    demoMode = false;
+    document.getElementById('demo-banner').classList.remove('visible');
+    document.getElementById('logout-btn').textContent = 'Logout';
+    if (location.pathname === '/demo') history.replaceState(null, '', '/');
+  }
   token = null;
   sessionStorage.removeItem('token');
   if (supa) supa.auth.signOut();
@@ -2156,7 +2220,7 @@ async function loadStructure() {
   try {
     const resp = await fetch(
       `/api/structure/${selectedMethod}/${encodeURIComponent(id)}/${MODEL}`,
-      { headers: { Authorization: `Bearer ${token}` } }
+      { headers: authHeaders() }
     );
     if (!resp.ok) throw new Error((await resp.json()).error || 'Failed');
     const fmt = resp.headers.get('X-File-Format') || 'pdb';
@@ -2796,7 +2860,7 @@ function clickSeqResidue(chain, resi, resn) {
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 async function apiGet(url) {
-  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const r = await fetch(url, { headers: authHeaders() });
   if (r.status === 401) { logout(); return null; }
   return r.json();
 }
@@ -3338,6 +3402,7 @@ document.getElementById('terms-overlay').addEventListener('click', e => {
 authReady.then(() => {
   const settingPassword = document.getElementById('set-password-form').style.display === 'block';
   if (token && !settingPassword) showApp();
+  else if (!token && !settingPassword && demoInfo && location.pathname === '/demo') enterDemo();
 });
 </script>
 </body>
