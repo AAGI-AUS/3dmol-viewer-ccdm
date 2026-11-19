@@ -42,3 +42,6 @@ coverage/
 # System files
 *.pid
 *.seed
+
+# Cloudflare worker
+.wrangler/

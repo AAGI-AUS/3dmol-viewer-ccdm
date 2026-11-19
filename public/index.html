@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Protein-protein interaction viewer</title>
 <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <style>
   /* ── Theme tokens ───────────────────────────────────────────────────────
      Every colour in the app resolves through one of these, so flipping
@@ -167,6 +168,10 @@
   }
   .login-btn:hover { background: var(--accent-hover); }
   .error-msg { color: var(--danger); font-size: 0.85rem; margin-top: 12px; text-align: center; min-height: 20px; }
+  .info-msg { color: var(--text-muted); font-size: 0.85rem; margin-top: 12px; text-align: center; }
+  .forgot-link { display: block; margin-top: 10px; text-align: center; font-size: 0.8rem; color: var(--accent-2); background: none; border: none; cursor: pointer; width: 100%; }
+  .forgot-link:hover { text-decoration: underline; }
+  #set-password-form { display: none; }
 
   /* ── Main app ── */
   #app { display: none; height: 100vh; }
@@ -809,16 +814,32 @@
   <div class="login-card">
     <h1>🧬 Protein-protein interaction viewer</h1>
     <p>Structure explorer</p>
-    <div class="field">
-      <label>Username</label>
-      <input type="text" id="username" autocomplete="username" placeholder="admin">
+    <div id="sign-in-form">
+      <div class="field">
+        <label id="username-label">Username</label>
+        <input type="text" id="username" autocomplete="username" placeholder="admin">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="password" autocomplete="current-password">
+      </div>
+      <button class="login-btn" onclick="login()">Sign In</button>
+      <button class="forgot-link" id="forgot-link" onclick="forgotPassword()" hidden>Forgot password?</button>
     </div>
-    <div class="field">
-      <label>Password</label>
-      <input type="password" id="password" autocomplete="current-password">
+    <!-- Shown after following an invite or password-reset email (cloud sign-in only) -->
+    <div id="set-password-form">
+      <div class="field">
+        <label>New password</label>
+        <input type="password" id="new-password" autocomplete="new-password" minlength="8">
+      </div>
+      <div class="field">
+        <label>Repeat new password</label>
+        <input type="password" id="new-password-2" autocomplete="new-password" minlength="8">
+      </div>
+      <button class="login-btn" onclick="setNewPassword()">Set password</button>
     </div>
-    <button class="login-btn" onclick="login()">Sign In</button>
     <div class="error-msg" id="login-error"></div>
+    <div class="info-msg" id="login-info"></div>
     <div class="login-terms">
       This viewer includes AlphaFold 3 predictions, which are for non-commercial use only and
       are subject to the <a href="legal/AF3_OUTPUT_TERMS_OF_USE.txt" target="_blank" rel="noopener noreferrer">AlphaFold 3 Output Terms of Use</a>.
@@ -1244,6 +1265,17 @@ let plddtByResidue = null;   // 'chain:resi' -> pLDDT, read off the loaded model
 let loadedStructure = null;  // { entry, method, model }
 let currentStructureText = null;
 let currentStructureFormat = null;
+// Atoms of the structure in the viewer, parsed once on first use. The interface
+// and the sequence tracks are computed from these in the browser — the file is
+// already here, and it keeps that work off the server (a Cloudflare Worker on
+// the free plan gets 10 ms of CPU per request; the larger complexes need ~90).
+let currentAtoms = null;
+let structureLib = null;
+async function loadedAtoms() {
+  structureLib = structureLib || await import('./js/structure.js');
+  if (!currentAtoms) currentAtoms = structureLib.parseAtoms(currentStructureText, currentStructureFormat);
+  return currentAtoms;
+}
 let videoRecording = false;
 
 const AA3TO1 = {
@@ -1321,11 +1353,86 @@ function resetColors() {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+// Two back ends serve this page. The VM's server.js has its own /api/login and
+// issues its own token; the Cloudflare Worker hands sign-in to Supabase Auth
+// and announces that through /api/config (server.js has no such route, so a
+// failed lookup means the classic login). `token` holds whichever bearer
+// token the API expects, so the rest of the page doesn't care which it is.
+let supa = null;
+// Supabase consumes the URL fragment when the client starts, so note what kind
+// of email link (if any) brought the user here before that happens.
+const arrivedViaInvite = /type=invite/.test(location.hash);
+
+function showSetPasswordForm(on) {
+  document.getElementById('sign-in-form').style.display = on ? 'none' : '';
+  document.getElementById('set-password-form').style.display = on ? 'block' : 'none';
+}
+
+const authReady = (async () => {
+  let cfg = null;
+  try {
+    const r = await fetch('/api/config');
+    if (r.ok) cfg = await r.json();
+  } catch { /* classic server */ }
+  if (!cfg || cfg.auth !== 'supabase' || !window.supabase) return;
+
+  supa = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+  token = null;
+  sessionStorage.removeItem('token');
+  document.getElementById('username-label').textContent = 'Email';
+  const userEl = document.getElementById('username');
+  userEl.type = 'email';
+  userEl.autocomplete = 'email';
+  userEl.placeholder = 'you@example.org';
+  document.getElementById('forgot-link').hidden = false;
+
+  supa.auth.onAuthStateChange((event, session) => {
+    token = session ? session.access_token : null;
+    if (event === 'PASSWORD_RECOVERY') showSetPasswordForm(true);
+  });
+  const { data } = await supa.auth.getSession();
+  token = data.session ? data.session.access_token : null;
+  if (token && arrivedViaInvite) showSetPasswordForm(true);
+})();
+
+async function forgotPassword() {
+  const email = document.getElementById('username').value.trim();
+  const errEl = document.getElementById('login-error');
+  const infoEl = document.getElementById('login-info');
+  errEl.textContent = ''; infoEl.textContent = '';
+  if (!email) { errEl.textContent = 'Enter your email address first'; return; }
+  const { error } = await supa.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  if (error) { errEl.textContent = error.message; return; }
+  infoEl.textContent = 'If that address has an account, a reset link is on its way.';
+}
+
+async function setNewPassword() {
+  const p1 = document.getElementById('new-password').value;
+  const p2 = document.getElementById('new-password-2').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if (p1.length < 8) { errEl.textContent = 'Use at least 8 characters'; return; }
+  if (p1 !== p2) { errEl.textContent = 'The passwords do not match'; return; }
+  const { error } = await supa.auth.updateUser({ password: p1 });
+  if (error) { errEl.textContent = error.message; return; }
+  showSetPasswordForm(false);
+  history.replaceState(null, '', location.pathname);
+  showApp();
+}
+
 async function login() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
+  document.getElementById('login-info').textContent = '';
+  if (supa) {
+    const { data, error } = await supa.auth.signInWithPassword({ email: username, password });
+    if (error) { errEl.textContent = error.message || 'Login failed'; return; }
+    token = data.session.access_token;
+    showApp();
+    return;
+  }
   try {
     const r = await fetch('/api/login', {
       method: 'POST',
@@ -1345,12 +1452,14 @@ async function login() {
 function logout() {
   token = null;
   sessionStorage.removeItem('token');
+  if (supa) supa.auth.signOut();
   document.getElementById('app').classList.remove('visible');
   document.getElementById('login-screen').style.display = 'flex';
   if (viewer) { viewer.clear(); viewer = null; }
   structureLoaded = false;
   currentStructureText = null;
   currentStructureFormat = null;
+  currentAtoms = null;
   updateExportMenu();
 }
 
@@ -1952,6 +2061,7 @@ async function loadStructure() {
     };
     currentStructureText = text;
     currentStructureFormat = fmt;
+    currentAtoms = null;
     await loadSequence();
     computeChainRoles();
     updateChainRoleLabels();
@@ -2396,14 +2506,18 @@ async function loadInterface() {
     status.textContent = 'Load a structure first — the interface is computed on the model in the viewer.';
     return;
   }
-  const { entry, method, model } = loadedStructure;
-  const cutoff = parseFloat(document.getElementById('cutoff-input').value) || 10;
+  const cutoff = Math.min(Math.max(parseFloat(document.getElementById('cutoff-input').value) || 10, 1), 30);
   status.textContent = 'Calculating…';
 
-  const data = await apiGet(
-    `/api/structure/${method}/${encodeURIComponent(entry.identifier)}/${model}/interface?cutoff=${cutoff}`
-  );
-  if (!data) { status.textContent = 'Could not compute the interface for this model.'; return; }
+  let data;
+  try {
+    const atoms = await loadedAtoms();
+    data = { cutoff, interface: structureLib.findInterfaceResidues(atoms, cutoff) };
+  } catch (err) {
+    console.error(err);
+    status.textContent = 'Could not compute the interface for this model.';
+    return;
+  }
 
   interfaceData = data.interface;
   applyStyle();      // redraws base + interface overlay
@@ -2426,12 +2540,15 @@ function clearInterface() {
 
 // ── Sequence viewer ───────────────────────────────────────────────────────────
 async function loadSequence() {
-  if (!loadedStructure) return;
-  const { entry, method, model } = loadedStructure;
-  const data = await apiGet(
-    `/api/structure/${method}/${encodeURIComponent(entry.identifier)}/${model}/sequence`
-  );
-  if (!data) return;
+  if (!loadedStructure || !currentStructureText) return;
+  let data;
+  try {
+    const atoms = await loadedAtoms();
+    data = structureLib.sequenceByChain(atoms);
+  } catch (err) {
+    console.error(err);
+    return;
+  }
   sequenceData = data;
   // The chains this structure actually uses are only known now, and the panel
   // labels them by role — so resolve the roles before anything renders.
@@ -3097,7 +3214,12 @@ document.getElementById('terms-overlay').addEventListener('click', e => {
 });
 
 // ── Auto-login if token in session ────────────────────────────────────────────
-if (token) showApp();
+// An invite or reset link signs the user in but still needs a password set
+// first, so the set-password form being up means: stay on the login screen.
+authReady.then(() => {
+  const settingPassword = document.getElementById('set-password-form').style.display === 'block';
+  if (token && !settingPassword) showApp();
+});
 </script>
 </body>
 </html>
