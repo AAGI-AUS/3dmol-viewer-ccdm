@@ -7,7 +7,7 @@ create table if not exists public.entries (
   plant_species     text,
   pathogen_species  text,
   effector_name     text,
-  data              jsonb not null,          -- the full row as /api/metadata/* returns it
+  data              json not null,           -- the full row as /api/metadata/* returns it; json (not jsonb) keeps key order
   updated_at        timestamptz not null default now()
 );
 
@@ -34,3 +34,6 @@ create policy "signed-in users can read structures"
 
 revoke all on public.entries, public.structures from anon;
 grant select on public.entries, public.structures to authenticated;
+-- Newer projects don't grant table privileges to the API roles by default;
+-- the loader writes with the service role.
+grant select, insert, update, delete on public.entries, public.structures to service_role;
