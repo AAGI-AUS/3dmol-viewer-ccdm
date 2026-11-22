@@ -1,6 +1,6 @@
 {
   "name": "3dmol-viewer-ccdm",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "description": "Web-based protein structure viewer for effector–host interaction predictions with support for multiple structure prediction methods",
   "license": "BSD-3-Clause",
   "author": {
